@@ -8,6 +8,10 @@ struct TodoStrip: View {
         todos.first(where: { $0.isInProgress })?.id ?? todos.first(where: { !$0.isComplete })?.id
     }
 
+    private var todoIDs: String {
+        todos.map { $0.id }.joined(separator: "|")
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
@@ -31,6 +35,7 @@ struct TodoStrip: View {
             .onChange(of: focusTodoID) { _, _ in
                 scrollToFocus(with: proxy, animated: true)
             }
+            .animation(opencodeSelectionAnimation, value: todoIDs)
         }
     }
 
@@ -40,7 +45,7 @@ struct TodoStrip: View {
             proxy.scrollTo(focusTodoID, anchor: .leading)
         }
         if animated {
-            withAnimation(.easeInOut(duration: 0.2), action)
+            withAnimation(opencodeSelectionAnimation, action)
         } else {
             action()
         }

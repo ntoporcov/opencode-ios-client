@@ -29,5 +29,6 @@ struct ProjectRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.vertical, 4)
         .contentShape(Rectangle())
+        .animation(opencodeSelectionAnimation, value: isSelected)
     }
 }

@@ -23,10 +23,14 @@ struct ThinkingRow: View {
             Spacer(minLength: 44)
         }
         .frame(maxWidth: .infinity)
-        .task {
+        .onAppear {
+            guard !phase else { return }
             withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                phase.toggle()
+                phase = true
             }
+        }
+        .onDisappear {
+            phase = false
         }
     }
 }

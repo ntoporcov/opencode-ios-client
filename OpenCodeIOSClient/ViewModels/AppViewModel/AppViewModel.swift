@@ -1,4 +1,7 @@
 import Foundation
+import SwiftUI
+
+let opencodeSelectionAnimation = Animation.snappy(duration: 0.28, extraBounce: 0.02)
 
 @MainActor
 final class AppViewModel: ObservableObject {
@@ -49,6 +52,7 @@ final class AppViewModel: ObservableObject {
     var debugProbeStreamTasks: [Task<Void, Never>] = []
     var uiTestBootstrapTitle: String?
     var uiTestBootstrapPrompt: String?
+    var uiTestDirectory: String?
     var lastStreamEventAt = Date.distantPast
     var streamDirectory: String?
     var liveRefreshGeneration = 0

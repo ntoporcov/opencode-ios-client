@@ -82,6 +82,7 @@ extension AppViewModel {
         config.password = environment["OPENCODE_UI_TEST_PASSWORD"] ?? ""
         uiTestBootstrapTitle = environment["OPENCODE_UI_TEST_SESSION_TITLE"]
         uiTestBootstrapPrompt = environment["OPENCODE_UI_TEST_PROMPT"]
+        uiTestDirectory = environment["OPENCODE_UI_TEST_DIRECTORY"]
         hasSavedServer = false
         showSavedServerPrompt = false
         return true
@@ -97,12 +98,17 @@ extension AppViewModel {
         uiTestBootstrapPrompt = nil
 
         do {
-            let session = try await client.createSession(title: title)
+            if let uiTestDirectory, !uiTestDirectory.isEmpty {
+                await selectDirectory(uiTestDirectory)
+            }
+            let session = try await client.createSession(title: title, directory: effectiveSelectedDirectory)
+            upsertVisibleSession(session)
             directoryState.selectedSession = session
             try await loadMessages(for: session)
-            try await client.sendMessageAsync(sessionID: session.id, text: prompt, directory: session.directory)
+            try await client.sendMessageAsync(sessionID: session.id, text: prompt, directory: sendDirectory(for: session))
             try await loadMessages(for: session)
             try await reloadSessions()
+            upsertVisibleSession(session)
         } catch {
             errorMessage = error.localizedDescription
         }

@@ -5,13 +5,17 @@ struct SessionListView: View {
     let onSessionChosen: () -> Void
 
     var body: some View {
+        let sessionIDs = viewModel.sessions.map { $0.id }.joined(separator: "|")
+
         List {
             Section("Sessions") {
                 ForEach(viewModel.sessions) { session in
                     Button {
                         Task {
                             await viewModel.selectSession(session)
-                            onSessionChosen()
+                            withAnimation(opencodeSelectionAnimation) {
+                                onSessionChosen()
+                            }
                         }
                     } label: {
                         SessionRow(viewModel: viewModel, session: session)
@@ -52,5 +56,8 @@ struct SessionListView: View {
         .sheet(isPresented: $viewModel.isShowingCreateSessionSheet) {
             CreateSessionSheet(viewModel: viewModel)
         }
+        .animation(opencodeSelectionAnimation, value: viewModel.selectedSession?.id)
+        .animation(opencodeSelectionAnimation, value: sessionIDs)
+        .animation(opencodeSelectionAnimation, value: viewModel.errorMessage ?? "")
     }
 }

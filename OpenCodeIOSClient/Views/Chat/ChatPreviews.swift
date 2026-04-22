@@ -48,7 +48,7 @@ private struct MessageComposerPreviewHost: View {
     @State private var text = "Can you tighten the vertical rhythm in this screen?"
 
     var body: some View {
-        MessageComposer(text: $text, isSending: false, onSend: {})
+        MessageComposer(text: $text, isBusy: false, onSend: {}, onStop: {})
             .padding()
             .background(Color(uiColor: .systemGroupedBackground))
     }
@@ -56,7 +56,7 @@ private struct MessageComposerPreviewHost: View {
 
 #Preview("Chat View") {
     NavigationStack {
-        ChatView(viewModel: AppViewModel.preview(), session: OpenCodePreviewData.primarySession)
+        ChatView(viewModel: AppViewModel.preview(), sessionID: OpenCodePreviewData.primarySession.id)
     }
 }
 

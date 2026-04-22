@@ -42,7 +42,6 @@ extension AppViewModel {
             onRawLine: nil,
             onEvent: { [weak self] managed in
                 await MainActor.run {
-                    self?.lastStreamEventAt = .now
                     self?.appendDebugLog("event \(managed.envelope.type): \(managed.directory)")
                     self?.handleManagedEvent(managed)
                 }
@@ -101,6 +100,9 @@ extension AppViewModel {
     func handleManagedEvent(_ managed: OpenCodeManagedEvent) {
         guard isConnected else { return }
 
+        appendDebugLog(eventScopeSummary(for: managed))
+        appendDebugLog(eventIdentitySummary(for: managed.envelope))
+
         if OpenCodeStateReducer.applyGlobalEvent(event: managed.typed, projects: &projects, currentProject: &currentProject) {
             switch managed.typed {
             case .serverConnected, .globalDisposed:
@@ -111,6 +113,28 @@ extension AppViewModel {
             default:
                 break
             }
+            return
+        }
+
+        guard shouldApplyDirectoryEvent(from: managed.directory) else {
+            appendDebugLog("drop \(managed.envelope.type): scope mismatch \(managed.directory) selected=\(debugDirectoryLabel(effectiveSelectedDirectory)) stream=\(debugDirectoryLabel(streamDirectory)) session=\(debugSessionLabel(selectedSession))")
+            return
+        }
+
+        if eventAffectsActiveSession(managed) {
+            lastStreamEventAt = .now
+        }
+
+        if case let .sessionError(sessionID, message) = managed.typed {
+            if let sessionID {
+                directoryState.sessionStatuses[sessionID] = "idle"
+            }
+            if sessionID == nil || sessionID == selectedSession?.id {
+                errorMessage = message ?? "Session error"
+            }
+            debugLastEventSummary = message.map { "session error: \($0)" } ?? "session error"
+            appendDebugLog(debugLastEventSummary)
+            stopFallbackRefresh()
             return
         }
 
@@ -188,6 +212,65 @@ extension AppViewModel {
             Task { [weak self] in
                 await self?.loadAllQuestions()
             }
+        }
+    }
+
+    private func shouldApplyDirectoryEvent(from eventDirectory: String) -> Bool {
+        let acceptedDirectories = [selectedSession?.directory, effectiveSelectedDirectory]
+            .compactMap { directory -> String? in
+                guard let directory, !directory.isEmpty else { return nil }
+                return directory
+            }
+
+        guard !acceptedDirectories.isEmpty else {
+            return eventDirectory == "global"
+        }
+
+        return acceptedDirectories.contains(eventDirectory)
+    }
+
+    private func eventScopeSummary(for managed: OpenCodeManagedEvent) -> String {
+        let selectedSessionID = selectedSession?.id ?? "nil"
+        let payloadSessionID = managed.envelope.properties.sessionID ?? "nil"
+        let payloadInfoSessionID = managed.envelope.properties.info?.sessionID ?? "nil"
+        let partSessionID = managed.envelope.properties.part?.sessionID ?? "nil"
+        return "scope event=\(managed.envelope.type) dir=\(managed.directory) selectedDir=\(debugDirectoryLabel(effectiveSelectedDirectory)) streamDir=\(debugDirectoryLabel(streamDirectory)) selectedSession=\(selectedSessionID) payloadSession=\(payloadSessionID) infoSession=\(payloadInfoSessionID) partSession=\(partSessionID)"
+    }
+
+    func debugDirectoryLabel(_ directory: String?) -> String {
+        guard let directory, !directory.isEmpty else { return "nil" }
+        return directory
+    }
+
+    func debugSessionLabel(_ session: OpenCodeSession?) -> String {
+        guard let session else { return "nil" }
+        return "\(session.id)@\(debugDirectoryLabel(session.directory))"
+    }
+
+    private func eventAffectsActiveSession(_ managed: OpenCodeManagedEvent) -> Bool {
+        guard let selectedSessionID = selectedSession?.id else {
+            return true
+        }
+
+        switch managed.typed {
+        case let .sessionCreated(session), let .sessionUpdated(session), let .sessionDeleted(session):
+            return session.id == selectedSessionID
+        case let .sessionStatus(sessionID, _), let .sessionIdle(sessionID), let .sessionDiff(sessionID), let .todoUpdated(sessionID, _), let .messageRemoved(sessionID, _), let .messagePartDelta(sessionID, _, _, _, _), let .permissionReplied(sessionID, _, _), let .questionReplied(sessionID, _), let .questionRejected(sessionID, _):
+            return sessionID == selectedSessionID
+        case let .sessionError(sessionID, _):
+            return sessionID == nil || sessionID == selectedSessionID
+        case let .messageUpdated(info):
+            return info.sessionID == selectedSessionID
+        case let .messagePartUpdated(part):
+            return part.sessionID == selectedSessionID
+        case let .permissionAsked(permission):
+            return permission.sessionID == selectedSessionID
+        case let .questionAsked(question):
+            return question.sessionID == selectedSessionID
+        case let .messagePartRemoved(messageID, _):
+            return messages.contains { $0.info.id == messageID }
+        default:
+            return false
         }
     }
 
@@ -297,6 +380,19 @@ extension AppViewModel {
         if debugProbeLog.count > 400 {
             debugProbeLog.removeFirst(debugProbeLog.count - 400)
         }
+#if DEBUG
+        print("[OpenCodeDebug] \(stamped)")
+#endif
+    }
+
+    func eventIdentitySummary(for payload: OpenCodeEventEnvelope) -> String {
+        let infoID = payload.properties.info?.id ?? "nil"
+        let infoRole = payload.properties.info?.role ?? "nil"
+        let messageID = payload.properties.messageID ?? payload.properties.part?.messageID ?? "nil"
+        let partID = payload.properties.partID ?? payload.properties.part?.id ?? "nil"
+        let partType = payload.properties.part?.type ?? "nil"
+        let sessionID = payload.properties.sessionID ?? payload.properties.info?.sessionID ?? payload.properties.part?.sessionID ?? "nil"
+        return "event ids type=\(payload.type) session=\(sessionID) info=\(infoID):\(infoRole) message=\(messageID) part=\(partID):\(partType)"
     }
 
     func probeLabel(for url: URL) -> String {

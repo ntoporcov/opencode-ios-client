@@ -1,0 +1,14 @@
+.DS_Store
+
+# Xcode / SwiftPM build output
+DerivedData/
+build/
+BuildDevice/
+*.xcresult/
+
+# User-specific Xcode state
+xcuserdata/
+*.xcuserstate
+
+# Local scratch space
+tmp/

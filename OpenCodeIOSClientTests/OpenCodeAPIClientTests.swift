@@ -19,8 +19,10 @@ final class OpenCodeAPIClientTests: XCTestCase {
 
         MockURLProtocol.requestHandler = { request in
             XCTAssertEqual(request.url?.path, "/session/ses_test/prompt_async")
+            XCTAssertNil(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems)
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Basic b3BlbmNvZGU6cHc=")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "x-opencode-directory"), "/tmp/project")
             expectation.fulfill()
 
             return (
@@ -29,7 +31,68 @@ final class OpenCodeAPIClientTests: XCTestCase {
             )
         }
 
-        try await client.sendMessageAsync(sessionID: "ses_test", text: "hello")
+        try await client.sendMessageAsync(sessionID: "ses_test", text: "hello", directory: "/tmp/project")
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
+    func testAbortSessionUsesAbortEndpoint() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/session/ses_test/abort")
+            XCTAssertEqual(request.httpMethod, "POST")
+            expectation.fulfill()
+
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 204, httpVersion: nil, headerFields: nil)!,
+                Data()
+            )
+        }
+
+        try await client.abortSession(sessionID: "ses_test")
+        await fulfillment(of: [expectation], timeout: 1)
+    }
+
+    func testListSessionStatusesUsesStatusEndpoint() async throws {
+        let expectation = expectation(description: "request captured")
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.protocolClasses = [MockURLProtocol.self]
+        let session = URLSession(configuration: configuration)
+        let client = OpenCodeAPIClient(
+            config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"),
+            session: session
+        )
+
+        MockURLProtocol.requestHandler = { request in
+            XCTAssertEqual(request.url?.path, "/session/status")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "directory", value: "/tmp/project"),
+            ])
+            XCTAssertEqual(request.httpMethod, "GET")
+            expectation.fulfill()
+
+            let data = """
+            {
+              \"ses_busy\": { \"type\": \"busy\" },
+              \"ses_idle\": { \"type\": \"idle\" }
+            }
+            """.data(using: .utf8)!
+
+            return (
+                HTTPURLResponse(url: try XCTUnwrap(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)!,
+                data
+            )
+        }
+
+        let statuses = try await client.listSessionStatuses(directory: "/tmp/project")
+        XCTAssertEqual(statuses, ["ses_busy": "busy", "ses_idle": "idle"])
         await fulfillment(of: [expectation], timeout: 1)
     }
 

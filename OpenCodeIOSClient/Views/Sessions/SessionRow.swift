@@ -43,5 +43,7 @@ struct SessionRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
+        .animation(opencodeSelectionAnimation, value: viewModel.hasPermissionRequest(for: session))
+        .animation(opencodeSelectionAnimation, value: viewModel.sessionPreviews[session.id]?.text ?? "")
     }
 }

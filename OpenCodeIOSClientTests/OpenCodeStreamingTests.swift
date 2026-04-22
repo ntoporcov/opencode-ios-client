@@ -133,13 +133,13 @@ final class OpenCodeStreamingTests: XCTestCase {
 
     func testCanonicalMergePreservesLongerStreamedText() throws {
         let streamed = OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil),
+            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
             parts: [
                 OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: "Hello world")
             ]
         )
         let canonical = OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil),
+            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
             parts: [
                 OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: "")
             ]
@@ -152,13 +152,13 @@ final class OpenCodeStreamingTests: XCTestCase {
 
     func testCanonicalMergeAcceptsNewerCompletedText() throws {
         let streamed = OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil),
+            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
             parts: [
                 OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: "Hello")
             ]
         )
         let canonical = OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil),
+            info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
             parts: [
                 OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: "Hello world")
             ]
@@ -167,6 +167,41 @@ final class OpenCodeStreamingTests: XCTestCase {
         let merged = streamed.mergedWithCanonical(canonical)
 
         XCTAssertEqual(merged.parts.first?.text, "Hello world")
+    }
+
+    func testSessionUpdatedPreservesExistingDirectoryWhenEventIsPartial() {
+        let existingSession = OpenCodeSession(
+            id: "ses_test",
+            title: "Original",
+            directory: "/tmp/project",
+            projectID: "proj_1",
+            parentID: nil
+        )
+        let partialUpdate = OpenCodeSession(
+            id: "ses_test",
+            title: "Renamed",
+            directory: nil,
+            projectID: nil,
+            parentID: nil
+        )
+        var state = OpenCodeDirectoryState(
+            sessions: [existingSession],
+            selectedSession: existingSession,
+            messages: [],
+            sessionStatuses: [:],
+            todos: [],
+            permissions: [],
+            questions: []
+        )
+
+        let result = OpenCodeStateReducer.applyDirectoryEvent(event: .sessionUpdated(partialUpdate), state: &state)
+
+        guard case .sessionChanged = result else {
+            return XCTFail("Expected sessionChanged, got \(result)")
+        }
+        XCTAssertEqual(state.sessions.first?.title, "Renamed")
+        XCTAssertEqual(state.sessions.first?.directory, "/tmp/project")
+        XCTAssertEqual(state.selectedSession?.directory, "/tmp/project")
     }
 
     private func decodeEvent(_ json: String) throws -> OpenCodeEventEnvelope {

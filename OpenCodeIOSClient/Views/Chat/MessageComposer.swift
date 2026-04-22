@@ -2,11 +2,16 @@ import SwiftUI
 
 struct MessageComposer: View {
     @Binding var text: String
-    let isSending: Bool
+    let isBusy: Bool
     let onSend: () -> Void
+    let onStop: () -> Void
 
     private var canSend: Bool {
-        !isSending && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !isBusy && !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var canStop: Bool {
+        isBusy
     }
 
     var body: some View {
@@ -18,16 +23,19 @@ struct MessageComposer: View {
                 .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .accessibilityIdentifier("chat.input")
 
-            Button(action: onSend) {
-                Image(systemName: "arrow.up")
+            Button(action: isBusy ? onStop : onSend) {
+                Image(systemName: isBusy ? "stop.fill" : "arrow.up")
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(canSend ? .primary : .secondary)
+                    .foregroundStyle((isBusy ? canStop : canSend) ? .primary : .secondary)
                     .frame(width: 32, height: 32)
             }
             .opencodePrimaryGlassButton()
-            .disabled(!canSend)
-            .accessibilityIdentifier("chat.send")
+            .disabled(isBusy ? !canStop : !canSend)
+            .accessibilityLabel(isBusy ? "Stop" : "Send")
+            .accessibilityIdentifier(isBusy ? "chat.stop" : "chat.send")
         }
         .shadow(color: .black.opacity(0.06), radius: 12, y: 3)
+        .animation(opencodeSelectionAnimation, value: isBusy)
+        .animation(opencodeSelectionAnimation, value: canSend)
     }
 }

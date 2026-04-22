@@ -1,5 +1,48 @@
 import Foundation
 
+enum OpenCodeIdentifier {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var lastTimestamp = 0
+    nonisolated(unsafe) private static var counter = 0
+    private static let base62Characters = Array("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+
+    static func message() -> String {
+        prefixedAscending("msg")
+    }
+
+    static func part() -> String {
+        prefixedAscending("prt")
+    }
+
+    private static func prefixedAscending(_ prefix: String) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+
+        let timestamp = Int(Date().timeIntervalSince1970 * 1000)
+        if timestamp != lastTimestamp {
+            lastTimestamp = timestamp
+            counter = 0
+        }
+
+        counter += 1
+
+        let value = UInt64(timestamp) << 12 | UInt64(counter & 0x0FFF)
+        let timeComponent = String(value, radix: 16, uppercase: false).leftPadded(to: 12, with: "0")
+        let randomComponent = String((0 ..< 14).map { _ in
+            base62Characters.randomElement() ?? "0"
+        })
+
+        return "\(prefix)_\(timeComponent)\(randomComponent)"
+    }
+}
+
+private extension String {
+    func leftPadded(to length: Int, with character: Character) -> String {
+        guard count < length else { return self }
+        return String(repeating: String(character), count: length - count) + self
+    }
+}
+
 struct HealthResponse: Codable {
     let healthy: Bool
     let version: String
@@ -14,6 +57,16 @@ struct OpenCodeSession: Codable, Identifiable, Hashable, Sendable {
 
     var isRootSession: Bool {
         parentID == nil
+    }
+
+    func merged(with incoming: OpenCodeSession) -> OpenCodeSession {
+        OpenCodeSession(
+            id: incoming.id,
+            title: incoming.title ?? title,
+            directory: incoming.directory ?? directory,
+            projectID: incoming.projectID ?? projectID,
+            parentID: incoming.parentID ?? parentID
+        )
     }
 }
 
@@ -49,10 +102,18 @@ struct OpenCodeMessageEnvelope: Codable, Identifiable, Hashable, Sendable {
 
     var id: String { info.id }
 
-    static func local(role: String, text: String) -> OpenCodeMessageEnvelope {
+    static func local(
+        role: String,
+        text: String,
+        messageID: String = OpenCodeIdentifier.message(),
+        sessionID: String? = nil,
+        partID: String = OpenCodeIdentifier.part(),
+        agent: String? = nil,
+        model: OpenCodeMessageModelReference? = nil
+    ) -> OpenCodeMessageEnvelope {
         OpenCodeMessageEnvelope(
-            info: OpenCodeMessage(id: UUID().uuidString, role: role, sessionID: nil, time: nil, agent: nil, model: nil),
-            parts: [OpenCodePart(id: nil, messageID: nil, sessionID: nil, type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: text)]
+            info: OpenCodeMessage(id: messageID, role: role, sessionID: sessionID, time: nil, agent: agent, model: model),
+            parts: [OpenCodePart(id: partID, messageID: messageID, sessionID: sessionID, type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: text)]
         )
     }
 
@@ -154,6 +215,40 @@ struct OpenCodeMessageModelReference: Codable, Hashable, Sendable {
 struct OpenCodeMessageTime: Codable, Hashable, Sendable {
     let created: Double?
     let completed: Double?
+}
+
+struct OpenCodeEventInfo: Codable, Hashable, Sendable {
+    let id: String
+    let role: String?
+    let sessionID: String?
+    let time: OpenCodeMessageTime?
+    let agent: String?
+    let model: OpenCodeMessageModelReference?
+    let title: String?
+    let directory: String?
+    let projectID: String?
+    let parentID: String?
+
+    init(message: OpenCodeMessage) {
+        id = message.id
+        role = message.role
+        sessionID = message.sessionID
+        time = message.time
+        agent = message.agent
+        model = message.model
+        title = nil
+        directory = nil
+        projectID = nil
+        parentID = nil
+    }
+
+    func asMessage() -> OpenCodeMessage {
+        OpenCodeMessage(id: id, role: role, sessionID: sessionID, time: time, agent: agent, model: model)
+    }
+
+    func asSession() -> OpenCodeSession {
+        OpenCodeSession(id: id, title: title, directory: directory, projectID: projectID, parentID: parentID)
+    }
 }
 
 struct SessionPreview: Hashable, Sendable {
@@ -470,6 +565,15 @@ struct OpenCodeSessionStatus: Codable, Hashable {
     let type: String
 }
 
+struct OpenCodeSessionErrorData: Codable, Hashable, Sendable {
+    let message: String?
+}
+
+struct OpenCodeSessionErrorPayload: Codable, Hashable, Sendable {
+    let name: String?
+    let data: OpenCodeSessionErrorData?
+}
+
 enum OpenCodeTypedEvent: Sendable {
     case projectUpdated(OpenCodeProject)
     case serverConnected
@@ -479,6 +583,7 @@ enum OpenCodeTypedEvent: Sendable {
     case sessionDeleted(OpenCodeSession)
     case sessionStatus(sessionID: String, status: String)
     case sessionIdle(sessionID: String)
+    case sessionError(sessionID: String?, message: String?)
     case sessionDiff(sessionID: String)
     case todoUpdated(sessionID: String, todos: [OpenCodeTodo])
     case messageUpdated(OpenCodeMessage)
@@ -503,14 +608,14 @@ enum OpenCodeTypedEvent: Sendable {
         case "global.disposed":
             self = .globalDisposed
         case "session.created":
-            guard let info = envelope.properties.info, let session = try? JSONDecoder().decode(OpenCodeSession.self, from: try JSONEncoder().encode(info)) else { return nil }
-            self = .sessionCreated(session)
+            guard let info = envelope.properties.info else { return nil }
+            self = .sessionCreated(info.asSession())
         case "session.updated":
-            guard let info = envelope.properties.info, let session = try? JSONDecoder().decode(OpenCodeSession.self, from: try JSONEncoder().encode(info)) else { return nil }
-            self = .sessionUpdated(session)
+            guard let info = envelope.properties.info else { return nil }
+            self = .sessionUpdated(info.asSession())
         case "session.deleted":
-            guard let info = envelope.properties.info, let session = try? JSONDecoder().decode(OpenCodeSession.self, from: try JSONEncoder().encode(info)) else { return nil }
-            self = .sessionDeleted(session)
+            guard let info = envelope.properties.info else { return nil }
+            self = .sessionDeleted(info.asSession())
         case "session.status":
             guard let sessionID = envelope.properties.sessionID,
                   let status = envelope.properties.status?.type else { return nil }
@@ -518,6 +623,8 @@ enum OpenCodeTypedEvent: Sendable {
         case "session.idle":
             guard let sessionID = envelope.properties.sessionID else { return nil }
             self = .sessionIdle(sessionID: sessionID)
+        case "session.error":
+            self = .sessionError(sessionID: envelope.properties.sessionID, message: envelope.properties.error?.data?.message)
         case "session.diff":
             guard let sessionID = envelope.properties.sessionID else { return nil }
             self = .sessionDiff(sessionID: sessionID)
@@ -527,7 +634,7 @@ enum OpenCodeTypedEvent: Sendable {
             self = .todoUpdated(sessionID: sessionID, todos: todos)
         case "message.updated":
             guard let info = envelope.properties.info else { return nil }
-            self = .messageUpdated(info)
+            self = .messageUpdated(info.asMessage())
         case "message.removed":
             guard let sessionID = envelope.properties.sessionID,
                   let messageID = envelope.properties.messageID else { return nil }
@@ -572,7 +679,7 @@ enum OpenCodeTypedEvent: Sendable {
 
 struct OpenCodeEventProperties: Codable, Sendable {
     let sessionID: String?
-    let info: OpenCodeMessage?
+    let info: OpenCodeEventInfo?
     let part: OpenCodePart?
     let status: OpenCodeSessionStatus?
     let todos: [OpenCodeTodo]?
@@ -590,6 +697,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
     let response: String?
     let reply: String?
     let message: String?
+    let error: OpenCodeSessionErrorPayload?
 
     enum CodingKeys: String, CodingKey {
         case sessionID
@@ -611,6 +719,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
         case response
         case reply
         case message
+        case error
     }
 }
 
@@ -867,10 +976,11 @@ enum OpenCodeStreamReducer {
                 result.reason = "missing info"
                 return result
             }
+            let message = info.asMessage()
             if let index = result.messages.firstIndex(where: { $0.info.id == info.id }) {
-                result.messages[index] = result.messages[index].updatingInfo(info)
+                result.messages[index] = result.messages[index].updatingInfo(message)
             } else {
-                result.messages.append(OpenCodeMessageEnvelope(info: info, parts: []))
+                result.messages.append(OpenCodeMessageEnvelope(info: message, parts: []))
             }
             result.applied = true
             result.reason = "message updated"
@@ -930,6 +1040,7 @@ struct CreateSessionRequest: Encodable {
 }
 
 struct SendMessageRequest: Encodable {
+    let messageID: String?
     let model: OpenCodeModelReference?
     let agent: String?
     let variant: String?
@@ -937,8 +1048,11 @@ struct SendMessageRequest: Encodable {
 }
 
 struct SendMessagePart: Encodable {
+    let id: String?
     let type: String
-    let text: String
+    let text: String?
+    let synthetic: Bool?
+    let metadata: [String: OpenCodeJSONValue]?
 }
 
 enum OpenCodeAPIError: LocalizedError {

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 extension AppViewModel {
     private struct DirectorySearchScope {
@@ -21,14 +22,18 @@ extension AppViewModel {
     }
 
     func presentProjectPicker() {
-        isShowingProjectPicker = true
+        withAnimation(opencodeSelectionAnimation) {
+            isShowingProjectPicker = true
+        }
     }
 
     func presentCreateProjectSheet() {
         createProjectQuery = ""
         createProjectResults = []
         createProjectSelectedDirectory = nil
-        isShowingCreateProjectSheet = true
+        withAnimation(opencodeSelectionAnimation) {
+            isShowingCreateProjectSheet = true
+        }
     }
 
     func searchProjects() async {
@@ -90,7 +95,9 @@ extension AppViewModel {
     }
 
     func selectCreateProjectDirectory(_ directory: String) async {
-        createProjectSelectedDirectory = directory
+        withAnimation(opencodeSelectionAnimation) {
+            createProjectSelectedDirectory = directory
+        }
         let displayPath = createProjectResultPath(directory)
         createProjectQuery = displayPath.hasSuffix("/") ? displayPath : displayPath + "/"
         await searchCreateProjectDirectories()
@@ -141,7 +148,9 @@ extension AppViewModel {
             createProjectQuery = ""
             createProjectResults = []
             createProjectSelectedDirectory = nil
-            isShowingCreateProjectSheet = false
+            withAnimation(opencodeSelectionAnimation) {
+                isShowingCreateProjectSheet = false
+            }
             await selectDirectory(selectedProjectDirectory)
         } catch {
             errorMessage = error.localizedDescription
@@ -149,12 +158,14 @@ extension AppViewModel {
     }
 
     func selectDirectory(_ directory: String?) async {
-        selectedDirectory = directory
-        directoryState.selectedSession = nil
-        directoryState.messages = []
-        directoryState.todos = []
-        directoryState.permissions = []
-        directoryState.questions = []
+        withAnimation(opencodeSelectionAnimation) {
+            selectedDirectory = directory
+            directoryState.selectedSession = nil
+            directoryState.messages = []
+            directoryState.todos = []
+            directoryState.permissions = []
+            directoryState.questions = []
+        }
         do {
             if let directory, !directory.isEmpty {
                 _ = try await client.listSessions(directory: directory, roots: true, limit: 55)
@@ -164,7 +175,9 @@ extension AppViewModel {
             }
             try await reloadSessions()
             await loadComposerOptions()
-            isShowingProjectPicker = false
+            withAnimation(opencodeSelectionAnimation) {
+                isShowingProjectPicker = false
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -177,7 +190,9 @@ extension AppViewModel {
         }
 
         if project.id == "global" {
-            currentProject = project
+            withAnimation(opencodeSelectionAnimation) {
+                currentProject = project
+            }
             await selectDirectory(nil)
             return
         }

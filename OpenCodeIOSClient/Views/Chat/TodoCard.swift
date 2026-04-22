@@ -28,6 +28,7 @@ struct TodoCard: View {
             RoundedRectangle(cornerRadius: 18, style: .continuous)
                 .strokeBorder(borderColor, lineWidth: todo.isInProgress ? 1.2 : 0.8)
         }
+        .animation(opencodeSelectionAnimation, value: todo.status)
     }
 
     private var iconName: String {

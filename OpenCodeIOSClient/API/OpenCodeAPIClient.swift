@@ -22,6 +22,12 @@ struct OpenCodeAPIClient {
         return try await send(path: "/session", method: "GET", queryItems: queryItems)
     }
 
+    func listSessionStatuses(directory: String? = nil) async throws -> [String: String] {
+        let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
+        let response: [String: OpenCodeSessionStatus] = try await send(path: "/session/status", method: "GET", queryItems: queryItems)
+        return response.mapValues { $0.type }
+    }
+
     func deleteSession(sessionID: String) async throws {
         try await sendNoContent(path: "/session/\(sessionID)", method: "DELETE")
     }
@@ -136,26 +142,34 @@ struct OpenCodeAPIClient {
         sessionID: String,
         text: String,
         directory: String? = nil,
+        messageID: String? = nil,
+        partID: String? = nil,
         model: OpenCodeModelReference? = nil,
         agent: String? = nil,
         variant: String? = nil
     ) async throws -> OpenCodeMessageEnvelope {
-        let payload = SendMessageRequest(model: model, agent: agent, variant: variant, parts: [SendMessagePart(type: "text", text: text)])
+        let payload = makePromptRequest(text: text, messageID: messageID, partID: partID, model: model, agent: agent, variant: variant)
         let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
-        return try await send(path: "/session/\(sessionID)/message", method: "POST", queryItems: queryItems, body: payload)
+        return try await send(path: "/session/\(sessionID)/message", method: "POST", queryItems: queryItems, body: payload, directoryHeader: directory)
     }
 
     func sendMessageAsync(
         sessionID: String,
         text: String,
         directory: String? = nil,
+        messageID: String? = nil,
+        partID: String? = nil,
         model: OpenCodeModelReference? = nil,
         agent: String? = nil,
         variant: String? = nil
     ) async throws {
-        let payload = SendMessageRequest(model: model, agent: agent, variant: variant, parts: [SendMessagePart(type: "text", text: text)])
+        let payload = makePromptRequest(text: text, messageID: messageID, partID: partID, model: model, agent: agent, variant: variant)
         let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
-        try await sendNoContent(path: "/session/\(sessionID)/prompt_async", method: "POST", queryItems: queryItems, body: payload)
+        try await sendNoContent(path: "/session/\(sessionID)/prompt_async", method: "POST", queryItems: queryItems, body: payload, directoryHeader: directory)
+    }
+
+    func abortSession(sessionID: String) async throws {
+        try await sendNoContent(path: "/session/\(sessionID)/abort", method: "POST")
     }
 
     func eventURLs(directory: String?) throws -> [URL] {
@@ -206,6 +220,18 @@ struct OpenCodeAPIClient {
         return try decode(data: data, response: response)
     }
 
+    private func send<Body: Encodable, T: Decodable>(path: String, method: String, body: Body, directoryHeader: String?) async throws -> T {
+        let request = try makeRequest(path: path, method: method, queryItems: [], body: body, directoryHeader: directoryHeader)
+        let (data, response) = try await session.data(for: request)
+        return try decode(data: data, response: response)
+    }
+
+    private func send<Body: Encodable, T: Decodable>(path: String, method: String, queryItems: [URLQueryItem], body: Body, directoryHeader: String?) async throws -> T {
+        let request = try makeRequest(path: path, method: method, queryItems: queryItems, body: body, directoryHeader: directoryHeader)
+        let (data, response) = try await session.data(for: request)
+        return try decode(data: data, response: response)
+    }
+
     private func send<Body: Encodable, T: Decodable>(path: String, method: String, queryItems: [URLQueryItem], body: Body) async throws -> T {
         let request = try makeRequest(path: path, method: method, queryItems: queryItems, body: body)
         let (data, response) = try await session.data(for: request)
@@ -218,6 +244,31 @@ struct OpenCodeAPIClient {
         guard let http = response as? HTTPURLResponse else {
             throw OpenCodeAPIError.invalidResponse
         }
+        debugLog(response: http, for: request, body: nil)
+        guard (200 ..< 300).contains(http.statusCode) else {
+            throw OpenCodeAPIError.httpError(http.statusCode, "")
+        }
+    }
+
+    private func sendNoContent<Body: Encodable>(path: String, method: String, body: Body, directoryHeader: String?) async throws {
+        let request = try makeRequest(path: path, method: method, queryItems: [], body: body, directoryHeader: directoryHeader)
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenCodeAPIError.invalidResponse
+        }
+        debugLog(response: http, for: request, body: nil)
+        guard (200 ..< 300).contains(http.statusCode) else {
+            throw OpenCodeAPIError.httpError(http.statusCode, "")
+        }
+    }
+
+    private func sendNoContent<Body: Encodable>(path: String, method: String, queryItems: [URLQueryItem], body: Body, directoryHeader: String?) async throws {
+        let request = try makeRequest(path: path, method: method, queryItems: queryItems, body: body, directoryHeader: directoryHeader)
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenCodeAPIError.invalidResponse
+        }
+        debugLog(response: http, for: request, body: nil)
         guard (200 ..< 300).contains(http.statusCode) else {
             throw OpenCodeAPIError.httpError(http.statusCode, "")
         }
@@ -229,6 +280,7 @@ struct OpenCodeAPIClient {
         guard let http = response as? HTTPURLResponse else {
             throw OpenCodeAPIError.invalidResponse
         }
+        debugLog(response: http, for: request, body: nil)
         guard (200 ..< 300).contains(http.statusCode) else {
             throw OpenCodeAPIError.httpError(http.statusCode, "")
         }
@@ -240,12 +292,13 @@ struct OpenCodeAPIClient {
         guard let http = response as? HTTPURLResponse else {
             throw OpenCodeAPIError.invalidResponse
         }
+        debugLog(response: http, for: request, body: nil)
         guard (200 ..< 300).contains(http.statusCode) else {
             throw OpenCodeAPIError.httpError(http.statusCode, "")
         }
     }
 
-    private func makeRequest(path: String, method: String, queryItems: [URLQueryItem]) throws -> URLRequest {
+    private func makeRequest(path: String, method: String, queryItems: [URLQueryItem], directoryHeader: String? = nil) throws -> URLRequest {
         guard let url = resolvedURL(path: path, queryItems: queryItems) else {
             throw OpenCodeAPIError.invalidURL
         }
@@ -256,13 +309,22 @@ struct OpenCodeAPIClient {
         request.setValue("no-cache", forHTTPHeaderField: "Cache-Control")
         request.setValue("no-cache", forHTTPHeaderField: "Pragma")
         request.setValue(basicAuthHeader(), forHTTPHeaderField: "Authorization")
+        if let directoryHeader = explicitDirectoryHeader(directoryHeader) ?? encodedDirectoryHeader(from: queryItems) {
+            request.setValue(directoryHeader, forHTTPHeaderField: "x-opencode-directory")
+        }
+
+        debugLog(request: request)
+
         return request
     }
 
-    private func makeRequest<Body: Encodable>(path: String, method: String, queryItems: [URLQueryItem], body: Body) throws -> URLRequest {
-        var request = try makeRequest(path: path, method: method, queryItems: queryItems)
+    private func makeRequest<Body: Encodable>(path: String, method: String, queryItems: [URLQueryItem], body: Body, directoryHeader: String? = nil) throws -> URLRequest {
+        var request = try makeRequest(path: path, method: method, queryItems: queryItems, directoryHeader: directoryHeader)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(body)
+
+        debugLog(request: request)
+
         return request
     }
 
@@ -270,6 +332,7 @@ struct OpenCodeAPIClient {
         guard let http = response as? HTTPURLResponse else {
             throw OpenCodeAPIError.invalidResponse
         }
+        debugLog(response: http, for: nil, body: data)
         guard (200 ..< 300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
             throw OpenCodeAPIError.httpError(http.statusCode, body)
@@ -290,6 +353,79 @@ struct OpenCodeAPIClient {
         let credentials = "\(config.username):\(config.password)"
         let encoded = Data(credentials.utf8).base64EncodedString()
         return "Basic \(encoded)"
+    }
+
+    private func debugLog(request: URLRequest) {
+        var headers = request.allHTTPHeaderFields ?? [:]
+        if headers["Authorization"] != nil {
+            headers["Authorization"] = "<redacted>"
+        }
+
+        let sortedHeaders = headers.keys.sorted().map { key in
+            "\(key)=\(headers[key] ?? "")"
+        }.joined(separator: ", ")
+
+        let body: String
+        if let httpBody = request.httpBody, !httpBody.isEmpty {
+            body = String(data: httpBody, encoding: .utf8) ?? "<\(httpBody.count) bytes binary>"
+        } else {
+            body = "<empty>"
+        }
+
+        print("[OpenCodeRequest] method=\(request.httpMethod ?? "na") url=\(request.url?.absoluteString ?? "nil") headers=[\(sortedHeaders)] body=\(body)")
+    }
+
+    private func debugLog(response: HTTPURLResponse, for request: URLRequest?, body: Data?) {
+        let responseBody: String
+        if let body, !body.isEmpty {
+            responseBody = String(data: body, encoding: .utf8) ?? "<\(body.count) bytes binary>"
+        } else {
+            responseBody = "<empty>"
+        }
+
+        print(
+            "[OpenCodeResponse] status=\(response.statusCode) url=\(request?.url?.absoluteString ?? response.url?.absoluteString ?? "nil") body=\(responseBody)"
+        )
+    }
+
+    private func encodedDirectoryHeader(from queryItems: [URLQueryItem]) -> String? {
+        guard let directory = queryItems.first(where: { $0.name == "directory" })?.value,
+              !directory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return directory.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? directory
+    }
+
+    private func explicitDirectoryHeader(_ directory: String?) -> String? {
+        guard let directory,
+              !directory.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return directory.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? directory
+    }
+
+    private func makePromptRequest(
+        text: String,
+        messageID: String?,
+        partID: String?,
+        model: OpenCodeModelReference?,
+        agent: String?,
+        variant: String?
+    ) -> SendMessageRequest {
+        let part = SendMessagePart(
+            id: partID,
+            type: "text",
+            text: text,
+            synthetic: nil,
+            metadata: nil
+        )
+        return SendMessageRequest(
+            messageID: messageID,
+            model: model,
+            agent: agent,
+            variant: variant,
+            parts: [part]
+        )
     }
 }
 

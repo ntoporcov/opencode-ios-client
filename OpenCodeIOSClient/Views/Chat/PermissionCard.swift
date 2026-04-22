@@ -52,5 +52,6 @@ struct PermissionCard: View {
         .padding(.vertical, 12)
         .frame(width: 260, alignment: .leading)
         .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .animation(opencodeSelectionAnimation, value: permission.id)
     }
 }

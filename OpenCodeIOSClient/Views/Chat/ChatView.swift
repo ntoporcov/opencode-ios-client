@@ -5,7 +5,7 @@ import UIKit
 
 struct ChatView: View {
     @ObservedObject var viewModel: AppViewModel
-    let session: OpenCodeSession
+    let sessionID: String
 
     @Namespace private var toolbarGlassNamespace
     @State private var keyboardHeight: CGFloat = 0
@@ -20,6 +20,32 @@ struct ChatView: View {
     @State private var keyboardScrollTask: Task<Void, Never>?
 
     private let messageWindowSize = 10
+    private var displayedMessageIDs: String {
+        displayedMessages.map { $0.id }.joined(separator: "|")
+    }
+
+    private var todoIDs: String {
+        viewModel.todos.map { $0.id }.joined(separator: "|")
+    }
+
+    private var permissionIDs: String {
+        viewModel.selectedSessionPermissions.map { $0.id }.joined(separator: "|")
+    }
+
+    private var questionIDs: String {
+        viewModel.selectedSessionQuestions.map { $0.id }.joined(separator: "|")
+    }
+
+    private var liveSession: OpenCodeSession {
+        if let selected = viewModel.selectedSession, selected.id == sessionID {
+            return selected
+        }
+
+        guard let session = viewModel.session(matching: sessionID) else {
+            fatalError("Missing session for ChatView: \(sessionID)")
+        }
+        return session
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -28,7 +54,7 @@ struct ChatView: View {
                     LazyVStack(spacing: 12) {
                         if hiddenMessageCount > 0 {
                             Button {
-                                withAnimation(.easeInOut(duration: 0.2)) {
+                                withAnimation(opencodeSelectionAnimation) {
                                     visibleMessageCount = min(viewModel.messages.count, visibleMessageCount + messageWindowSize)
                                 }
                             } label: {
@@ -52,13 +78,11 @@ struct ChatView: View {
                                 selectedActivityDetail = ActivityDetail(message: message, part: part)
                             }
                             .id(message.id)
-                            .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity))
                         }
 
                         if shouldShowThinking {
                             ThinkingRow()
                                 .id("thinking-row")
-                                .transition(.opacity)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -122,7 +146,7 @@ struct ChatView: View {
                 }
             }
         }
-        .navigationTitle(session.title ?? "Session")
+        .navigationTitle(liveSession.title ?? "Session")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { chatToolbar }
 #if DEBUG
@@ -149,6 +173,7 @@ struct ChatView: View {
                     showingTodoInspector = true
                 }
                 .padding(.horizontal, 16)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             if !viewModel.selectedSessionPermissions.isEmpty {
@@ -163,6 +188,7 @@ struct ChatView: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if !viewModel.selectedSessionQuestions.isEmpty {
                 QuestionPanel(
                     requests: viewModel.selectedSessionQuestions,
@@ -177,20 +203,29 @@ struct ChatView: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
+                let isBusy = viewModel.sessionStatuses[liveSession.id] == "busy"
                 MessageComposer(
                     text: $viewModel.draftMessage,
-                    isSending: viewModel.isLoading,
+                    isBusy: isBusy,
                     onSend: {
-                        Task { await viewModel.sendCurrentMessage() }
+                        Task { await viewModel.sendMessage(viewModel.draftMessage, sessionID: sessionID, userVisible: true) }
+                    },
+                    onStop: {
+                        Task { await viewModel.stopCurrentSession() }
                     }
                 )
                 .id(viewModel.composerResetToken)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .background(.clear)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(opencodeSelectionAnimation, value: todoIDs)
+        .animation(opencodeSelectionAnimation, value: permissionIDs)
+        .animation(opencodeSelectionAnimation, value: questionIDs)
     }
 
     private func scrollToBottom(with proxy: ScrollViewProxy, animated: Bool) {
@@ -203,7 +238,7 @@ struct ChatView: View {
         }
 
         if animated {
-            withAnimation(.easeOut(duration: 0.2), action)
+            withAnimation(opencodeSelectionAnimation, action)
         } else {
             action()
         }
@@ -236,7 +271,7 @@ struct ChatView: View {
     }
 
     private var shouldShowThinking: Bool {
-        guard viewModel.sessionStatuses[session.id] == "busy" else { return false }
+        guard viewModel.sessionStatuses[liveSession.id] == "busy" else { return false }
         guard let lastUserIndex = displayedMessages.lastIndex(where: { ($0.info.role ?? "").lowercased() == "user" }) else {
             return false
         }
@@ -255,7 +290,7 @@ struct ChatView: View {
     }
 
     private func isStreamingMessage(_ message: OpenCodeMessageEnvelope) -> Bool {
-        guard viewModel.sessionStatuses[session.id] == "busy" else { return false }
+        guard viewModel.sessionStatuses[liveSession.id] == "busy" else { return false }
         guard (message.info.role ?? "").lowercased() == "assistant" else { return false }
         return displayedMessages.last?.id == message.id
     }
@@ -263,7 +298,7 @@ struct ChatView: View {
     @ToolbarContentBuilder
     private var chatToolbar: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
-            AgentToolbarMenu(viewModel: viewModel, session: session, glassNamespace: toolbarGlassNamespace)
+            AgentToolbarMenu(viewModel: viewModel, session: liveSession, glassNamespace: toolbarGlassNamespace)
         }
 
         if #available(iOS 26.0, *) {
@@ -271,7 +306,7 @@ struct ChatView: View {
         }
 
         ToolbarItem(placement: .topBarTrailing) {
-            ModelToolbarMenu(viewModel: viewModel, session: session, glassNamespace: toolbarGlassNamespace)
+            ModelToolbarMenu(viewModel: viewModel, session: liveSession, glassNamespace: toolbarGlassNamespace)
         }
     }
 }

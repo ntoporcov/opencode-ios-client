@@ -1,20 +1,29 @@
 import Foundation
+import SwiftUI
 
 extension AppViewModel {
     func reloadSessions() async throws {
         let bootstrap = try await OpenCodeBootstrap.bootstrapDirectory(client: client, directory: effectiveSelectedDirectory)
-        directoryState.sessions = bootstrap.sessions
+        withAnimation(opencodeSelectionAnimation) {
+            directoryState.sessions = bootstrap.sessions
+        }
         prefetchSessionPreviews(for: directoryState.sessions)
-        directoryState.permissions = bootstrap.permissions
-        directoryState.questions = bootstrap.questions
+        withAnimation(opencodeSelectionAnimation) {
+            directoryState.permissions = bootstrap.permissions
+            directoryState.questions = bootstrap.questions
+        }
         if let selectedSessionID = directoryState.selectedSession?.id,
            let refreshed = directoryState.sessions.first(where: { $0.id == selectedSessionID }) {
-            directoryState.selectedSession = refreshed
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.selectedSession = refreshed
+            }
             streamDirectory = refreshed.directory
         } else {
-            directoryState.selectedSession = nil
-            directoryState.messages = []
-            directoryState.todos = []
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.selectedSession = nil
+                directoryState.messages = []
+                directoryState.todos = []
+            }
             if streamDirectory == nil {
                 streamDirectory = directoryState.sessions.first?.directory
             }
@@ -22,6 +31,12 @@ extension AppViewModel {
         if streamDirectory == nil {
             streamDirectory = directoryState.sessions.first?.directory
         }
+
+        try await reloadSessionStatuses()
+    }
+
+    func reloadSessionStatuses() async throws {
+        directoryState.sessionStatuses = try await client.listSessionStatuses(directory: effectiveSelectedDirectory)
     }
 
     func createSession() async {
@@ -32,11 +47,19 @@ extension AppViewModel {
             let title = draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
             let session = try await client.createSession(title: title.isEmpty ? nil : title, directory: effectiveSelectedDirectory)
             draftTitle = ""
-            isShowingCreateSessionSheet = false
+            withAnimation(opencodeSelectionAnimation) {
+                isShowingCreateSessionSheet = false
+            }
+            upsertVisibleSession(session)
             try await reloadSessions()
-            directoryState.selectedSession = session
+            upsertVisibleSession(session)
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.selectedSession = session
+            }
             streamDirectory = session.directory
-            directoryState.todos = []
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.todos = []
+            }
             try await loadMessages(for: session)
             errorMessage = nil
         } catch {
@@ -45,11 +68,15 @@ extension AppViewModel {
     }
 
     func selectSession(_ session: OpenCodeSession) async {
-        directoryState.selectedSession = session
+        withAnimation(opencodeSelectionAnimation) {
+            directoryState.selectedSession = session
+            directoryState.todos = []
+        }
         streamDirectory = session.directory
-        directoryState.todos = []
         do {
-            try await loadMessages(for: session)
+            async let messages: Void = loadMessages(for: session)
+            async let statuses: Void = reloadSessionStatuses()
+            _ = try await (messages, statuses)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -57,44 +84,111 @@ extension AppViewModel {
     }
 
     func sendCurrentMessage() async {
-        guard let selectedSession else { return }
+        guard let selectedSessionID = selectedSession?.id else { return }
         let text = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        await sendMessage(text, in: selectedSession, userVisible: true)
+        await sendMessage(text, sessionID: selectedSessionID, userVisible: true)
+    }
+
+    func stopCurrentSession() async {
+        guard let selectedSession else { return }
+
+        do {
+            try await client.abortSession(sessionID: selectedSession.id)
+        } catch {
+            appendDebugLog("abort error: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+        }
+
+        do {
+            async let statuses: Void = reloadSessionStatuses()
+            async let messages: Void = loadMessages(for: selectedSession)
+            _ = try await (statuses, messages)
+        } catch {
+            appendDebugLog("post-abort refresh error: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func sendMessage(_ text: String, sessionID: String, userVisible: Bool) async {
+        guard let session = session(matching: sessionID) else { return }
+        await sendMessage(text, in: session, userVisible: userVisible)
     }
 
     func sendMessage(_ text: String, in selectedSession: OpenCodeSession, userVisible: Bool) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        guard directoryState.sessionStatuses[selectedSession.id] != "busy" else {
+            appendDebugLog("send blocked busy session=\(debugSessionLabel(selectedSession)) selectedDir=\(debugDirectoryLabel(effectiveSelectedDirectory)) streamDir=\(debugDirectoryLabel(streamDirectory))")
+            return
+        }
 
-        let localUserMessage = OpenCodeMessageEnvelope.local(role: "user", text: trimmed)
+        let requestDirectory = sendDirectory(for: selectedSession)
+        let messageID = OpenCodeIdentifier.message()
+        let partID = OpenCodeIdentifier.part()
+        let modelReference = effectiveModelReference(for: selectedSession)
+        let agentName = effectiveAgentName(for: selectedSession)
+        let variant = selectedVariant(for: selectedSession)
+        let optimisticModel = modelReference.map {
+            OpenCodeMessageModelReference(providerID: $0.providerID, modelID: $0.modelID, variant: variant)
+        }
+
+        let localUserMessage = OpenCodeMessageEnvelope.local(
+            role: "user",
+            text: trimmed,
+            messageID: messageID,
+            partID: partID,
+            agent: agentName,
+            model: optimisticModel
+        )
         if userVisible {
             draftMessage = ""
             composerResetToken = UUID()
-            directoryState.messages.append(localUserMessage)
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.messages.append(localUserMessage)
+            }
         }
         appendDebugLog("send: \(trimmed)")
+        appendDebugLog(
+            "send scope session=\(debugSessionLabel(selectedSession)) selectedDir=\(debugDirectoryLabel(effectiveSelectedDirectory)) currentProject=\(currentProject?.id ?? "nil") requestDir=\(debugDirectoryLabel(requestDirectory)) msgID=\(messageID) partID=\(partID)"
+        )
 
         isLoading = true
+        let previousStatus = directoryState.sessionStatuses[selectedSession.id]
+        directoryState.sessionStatuses[selectedSession.id] = "busy"
         defer { isLoading = false }
 
         do {
             try await client.sendMessageAsync(
                 sessionID: selectedSession.id,
                 text: trimmed,
-                directory: selectedSession.directory,
-                model: effectiveModelReference(for: selectedSession),
-                agent: effectiveAgentName(for: selectedSession),
-                variant: selectedVariant(for: selectedSession)
+                directory: requestDirectory,
+                messageID: nil,
+                partID: nil,
+                model: modelReference,
+                agent: agentName,
+                variant: variant
             )
+            appendDebugLog("prompt_async accepted session=\(debugSessionLabel(selectedSession)) msgID=\(messageID) partID=\(partID)")
+            Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(500))
+                await self?.logServerMessageSnapshot(for: selectedSession, reason: "post-send 500ms")
+            }
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(2))
+                await self?.logServerMessageSnapshot(for: selectedSession, reason: "post-send 2s")
+            }
             startLiveRefresh(for: selectedSession, reason: "send")
             errorMessage = nil
         } catch {
             if userVisible {
-                directoryState.messages.removeAll { $0.id == localUserMessage.id }
+                withAnimation(opencodeSelectionAnimation) {
+                    directoryState.messages.removeAll { $0.id == localUserMessage.id }
+                }
                 draftMessage = trimmed
             }
+            directoryState.sessionStatuses[selectedSession.id] = previousStatus
             appendDebugLog("send error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
@@ -102,6 +196,8 @@ extension AppViewModel {
 
     func loadMessages(for session: OpenCodeSession) async throws {
         let loadedMessages = try await client.listMessages(sessionID: session.id)
+        guard selectedSession?.id == session.id else { return }
+        appendDebugLog(serverMessageSummary(loadedMessages, sessionID: session.id, reason: "loadMessages"))
         directoryState.messages = mergeMessagesPreservingStreamProgress(existing: directoryState.messages, loaded: loadedMessages)
         reconcileOptimisticUserMessages()
         syncComposerSelections(for: session)
@@ -173,6 +269,29 @@ extension AppViewModel {
         return detail
     }
 
+    @MainActor
+    func logServerMessageSnapshot(for session: OpenCodeSession, reason: String) async {
+        do {
+            let loadedMessages = try await client.listMessages(sessionID: session.id)
+            appendDebugLog(serverMessageSummary(loadedMessages, sessionID: session.id, reason: reason))
+        } catch {
+            appendDebugLog("server snapshot failed session=\(debugSessionLabel(session)) reason=\(reason) error=\(error.localizedDescription)")
+        }
+    }
+
+    func serverMessageSummary(_ messages: [OpenCodeMessageEnvelope], sessionID: String, reason: String) -> String {
+        let tail = messages.suffix(4).map { message in
+            let parts = message.parts.map { part in
+                let text = (part.text ?? "").replacingOccurrences(of: "\n", with: "\\n")
+                let snippet = String(text.prefix(40))
+                return "\(part.id):\(part.type ?? "nil"):\(snippet)"
+            }.joined(separator: "|")
+            return "\(message.id):\(message.info.role ?? "nil")[\(parts)]"
+        }.joined(separator: "; ")
+
+        return "server snapshot session=\(sessionID) reason=\(reason) count=\(messages.count) tail=\(tail)"
+    }
+
     func refreshTodosAndLatestTodoMessage() async throws -> (todos: [OpenCodeTodo], detail: OpenCodeMessageEnvelope?) {
         guard let selectedSession else {
             return (todos, nil)
@@ -209,25 +328,40 @@ extension AppViewModel {
 
     func loadTodos(for session: OpenCodeSession) async {
         do {
-            directoryState.todos = try await client.getTodos(sessionID: session.id)
+            let todos = try await client.getTodos(sessionID: session.id)
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.todos = todos
+            }
         } catch {
-            directoryState.todos = []
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.todos = []
+            }
         }
     }
 
     func loadAllPermissions() async {
         do {
-            directoryState.permissions = try await client.listPermissions()
+            let permissions = try await client.listPermissions()
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.permissions = permissions
+            }
         } catch {
-            directoryState.permissions = []
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.permissions = []
+            }
         }
     }
 
     func loadAllQuestions() async {
         do {
-            directoryState.questions = try await client.listQuestions()
+            let questions = try await client.listQuestions()
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.questions = questions
+            }
         } catch {
-            directoryState.questions = []
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.questions = []
+            }
         }
     }
 
@@ -258,20 +392,26 @@ extension AppViewModel {
             }
 
             try await client.replyToPermission(requestID: permission.id, reply: reply)
-            directoryState.permissions.removeAll { $0.id == permission.id }
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.permissions.removeAll { $0.id == permission.id }
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
     func dismissPermission(_ permission: OpenCodePermission) {
-        directoryState.permissions.removeAll { $0.id == permission.id }
+        withAnimation(opencodeSelectionAnimation) {
+            directoryState.permissions.removeAll { $0.id == permission.id }
+        }
     }
 
     func respondToQuestion(_ request: OpenCodeQuestionRequest, answers: [[String]]) async {
         do {
             try await client.replyToQuestion(requestID: request.id, answers: answers)
-            directoryState.questions.removeAll { $0.id == request.id }
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.questions.removeAll { $0.id == request.id }
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -280,7 +420,9 @@ extension AppViewModel {
     func dismissQuestion(_ request: OpenCodeQuestionRequest) async {
         do {
             try await client.rejectQuestion(requestID: request.id)
-            directoryState.questions.removeAll { $0.id == request.id }
+            withAnimation(opencodeSelectionAnimation) {
+                directoryState.questions.removeAll { $0.id == request.id }
+            }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -291,8 +433,10 @@ extension AppViewModel {
             try await client.deleteSession(sessionID: session.id)
             sessionPreviews[session.id] = nil
             if directoryState.selectedSession?.id == session.id {
-                directoryState.selectedSession = nil
-                directoryState.messages = []
+                withAnimation(opencodeSelectionAnimation) {
+                    directoryState.selectedSession = nil
+                    directoryState.messages = []
+                }
             }
             try await reloadSessions()
         } catch {
@@ -302,7 +446,48 @@ extension AppViewModel {
 
     func presentCreateSessionSheet() {
         draftTitle = ""
-        isShowingCreateSessionSheet = true
+        withAnimation(opencodeSelectionAnimation) {
+            isShowingCreateSessionSheet = true
+        }
+    }
+
+    func upsertVisibleSession(_ session: OpenCodeSession) {
+        withAnimation(opencodeSelectionAnimation) {
+            if let index = directoryState.sessions.firstIndex(where: { $0.id == session.id }) {
+                directoryState.sessions[index] = session
+            } else {
+                directoryState.sessions.insert(session, at: 0)
+            }
+        }
+    }
+
+    func session(matching sessionID: String) -> OpenCodeSession? {
+        if let selectedSession, selectedSession.id == sessionID {
+            return selectedSession
+        }
+
+        return directoryState.sessions.first(where: { $0.id == sessionID })
+    }
+
+    func sendDirectory(for session: OpenCodeSession) -> String? {
+        appendDebugLog(
+            "sendDirectory session=\(debugSessionLabel(session)) selectedDir=\(debugDirectoryLabel(effectiveSelectedDirectory)) currentProject=\(currentProject?.id ?? "nil")"
+        )
+        // Keep existing sessions bound to the directory they were created in.
+        if let sessionDirectory = session.directory,
+           !sessionDirectory.isEmpty {
+            return sessionDirectory
+        }
+
+        if let directory = effectiveSelectedDirectory, !directory.isEmpty {
+            return directory
+        }
+
+        if currentProject?.id == "global" {
+            return nil
+        }
+
+        return session.directory
     }
 
     func prefetchToolMessageDetails(for session: OpenCodeSession, messages: [OpenCodeMessageEnvelope]) {

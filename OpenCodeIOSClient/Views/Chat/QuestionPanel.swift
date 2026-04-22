@@ -7,6 +7,10 @@ struct QuestionPanel: View {
     let onDismiss: (OpenCodeQuestionRequest) -> Void
     let onSubmit: (OpenCodeQuestionRequest, [[String]]) -> Void
 
+    private var requestIDs: String {
+        requests.map { $0.id }.joined(separator: "|")
+    }
+
     var body: some View {
         VStack(spacing: 12) {
             ForEach(requests) { request in
@@ -45,6 +49,7 @@ struct QuestionPanel: View {
                                         .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                                     }
                                     .buttonStyle(.plain)
+                                    .animation(opencodeSelectionAnimation, value: answers[key, default: []])
                                 }
                             }
 
@@ -80,8 +85,10 @@ struct QuestionPanel: View {
                 }
                 .padding(14)
                 .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .animation(opencodeSelectionAnimation, value: requestIDs)
     }
 
     private func storageKey(requestID: String, index: Int) -> String {
@@ -103,7 +110,9 @@ struct QuestionPanel: View {
         } else {
             set = set.contains(option) ? [] : [option]
         }
-        answers[key] = set
+        withAnimation(opencodeSelectionAnimation) {
+            answers[key] = set
+        }
     }
 
     private func buildAnswers(for request: OpenCodeQuestionRequest) -> [[String]] {

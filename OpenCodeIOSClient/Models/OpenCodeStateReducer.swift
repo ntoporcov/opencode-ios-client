@@ -36,7 +36,7 @@ enum OpenCodeStateReducer {
         case let .sessionUpdated(session):
             upsertSession(session, into: &state.sessions)
             if state.selectedSession?.id == session.id {
-                state.selectedSession = session
+                state.selectedSession = state.selectedSession?.merged(with: session)
             }
             return .sessionChanged
         case let .sessionDeleted(session):
@@ -65,7 +65,7 @@ enum OpenCodeStateReducer {
                   info.sessionID == selectedSessionID else {
                 return .ignored("session mismatch")
             }
-            let payload = OpenCodeEventEnvelope(type: "message.updated", properties: .init(sessionID: info.sessionID, info: info, part: nil, status: nil, todos: nil, messageID: nil, partID: nil, field: nil, delta: nil, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil))
+            let payload = OpenCodeEventEnvelope(type: "message.updated", properties: .init(sessionID: info.sessionID, info: OpenCodeEventInfo(message: info), part: nil, status: nil, todos: nil, messageID: nil, partID: nil, field: nil, delta: nil, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil))
             let update = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: selectedSessionID, messages: state.messages)
             state.messages = update.messages
             return .message(update.reason)
@@ -74,7 +74,7 @@ enum OpenCodeStateReducer {
                   part.sessionID == selectedSessionID else {
                 return .ignored("session mismatch")
             }
-            let payload = OpenCodeEventEnvelope(type: "message.part.updated", properties: .init(sessionID: part.sessionID, info: nil, part: part, status: nil, todos: nil, messageID: nil, partID: nil, field: nil, delta: nil, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil))
+            let payload = OpenCodeEventEnvelope(type: "message.part.updated", properties: .init(sessionID: part.sessionID, info: nil, part: part, status: nil, todos: nil, messageID: nil, partID: nil, field: nil, delta: nil, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil))
             let update = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: selectedSessionID, messages: state.messages)
             state.messages = update.messages
             return .message(update.reason)
@@ -83,7 +83,7 @@ enum OpenCodeStateReducer {
                   sessionID == selectedSessionID else {
                 return .ignored("session mismatch")
             }
-            let payload = OpenCodeEventEnvelope(type: "message.part.delta", properties: .init(sessionID: sessionID, info: nil, part: nil, status: nil, todos: nil, messageID: messageID, partID: partID, field: field, delta: delta, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil))
+            let payload = OpenCodeEventEnvelope(type: "message.part.delta", properties: .init(sessionID: sessionID, info: nil, part: nil, status: nil, todos: nil, messageID: messageID, partID: partID, field: field, delta: delta, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil))
             let update = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: selectedSessionID, messages: state.messages)
             state.messages = update.messages
             return .message(update.reason)
@@ -132,7 +132,7 @@ enum OpenCodeStateReducer {
 
     private static func upsertSession(_ session: OpenCodeSession, into sessions: inout [OpenCodeSession]) {
         if let index = sessions.firstIndex(where: { $0.id == session.id }) {
-            sessions[index] = session
+            sessions[index] = sessions[index].merged(with: session)
         } else {
             sessions.append(session)
         }

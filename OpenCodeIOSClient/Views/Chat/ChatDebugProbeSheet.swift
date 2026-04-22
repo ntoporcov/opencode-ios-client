@@ -29,6 +29,7 @@ struct ChatDebugProbeSheet: View {
                             copiedDebugLog = true
                         }
                         .buttonStyle(.bordered)
+                        .accessibilityIdentifier("debugProbe.copy")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -40,6 +41,7 @@ struct ChatDebugProbeSheet: View {
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding()
+                        .accessibilityIdentifier("debugProbe.log")
                 }
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .padding(.horizontal)

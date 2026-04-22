@@ -5,6 +5,8 @@ struct ProjectListView: View {
     let onProjectChosen: () -> Void
 
     var body: some View {
+        let projectIDs = viewModel.projects.map { $0.id }.joined(separator: "|")
+
         List {
             Section("Projects") {
                 ForEach(viewModel.projects) { project in
@@ -18,7 +20,9 @@ struct ProjectListView: View {
                     .onTapGesture {
                         Task {
                             await viewModel.selectProject(project)
-                            onProjectChosen()
+                            withAnimation(opencodeSelectionAnimation) {
+                                onProjectChosen()
+                            }
                         }
                     }
                 }
@@ -46,6 +50,8 @@ struct ProjectListView: View {
         .sheet(isPresented: $viewModel.isShowingCreateProjectSheet) {
             CreateProjectSheet(viewModel: viewModel)
         }
+        .animation(opencodeSelectionAnimation, value: viewModel.selectedDirectory)
+        .animation(opencodeSelectionAnimation, value: projectIDs)
     }
 
     private func projectTitle(_ project: OpenCodeProject) -> String {
