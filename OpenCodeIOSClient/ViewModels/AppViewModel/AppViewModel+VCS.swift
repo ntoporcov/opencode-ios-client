@@ -2,6 +2,13 @@ import Foundation
 import SwiftUI
 
 extension AppViewModel {
+    struct FileTreeRow: Identifiable, Hashable {
+        let node: OpenCodeFileNode
+        let depth: Int
+
+        var id: String { node.absolute }
+    }
+
     var vcsSummary: OpenCodeVCSSummary {
         OpenCodeVCSSummary(
             fileCount: vcsFileStatuses.count,
@@ -21,6 +28,43 @@ extension AppViewModel {
                 score: status.added + status.removed
             )
         }
+    }
+
+    var visibleFileTreeRows: [FileTreeRow] {
+        flattenFileTree(nodes: directoryState.fileTreeRootNodes, depth: 0)
+    }
+
+    func isExpandedDirectory(_ path: String) -> Bool {
+        directoryState.expandedFileTreeDirectories.contains(path)
+    }
+
+    func isChangedFile(_ path: String) -> Bool {
+        vcsFileStatuses.contains { matchesVCSPath($0.path, toNodePath: path) }
+    }
+
+    func changedStatus(for path: String) -> OpenCodeVCSFileStatus? {
+        vcsFileStatuses.first { matchesVCSPath($0.path, toNodePath: path) }
+    }
+
+    func aggregateStatus(for node: OpenCodeFileNode) -> OpenCodeVCSAggregateStatus? {
+        let matches: [OpenCodeVCSFileStatus]
+
+        if node.isDirectory {
+            matches = vcsFileStatuses.filter { status in
+                isStatus(status.path, withinDirectoryNode: node)
+            }
+        } else if let exact = changedStatus(for: node.absolute) ?? changedStatus(for: node.path) {
+            matches = [exact]
+        } else {
+            matches = []
+        }
+
+        guard !matches.isEmpty else { return nil }
+        return OpenCodeVCSAggregateStatus(
+            fileCount: matches.count,
+            additions: matches.reduce(0) { $0 + $1.added },
+            deletions: matches.reduce(0) { $0 + $1.removed }
+        )
     }
 
     var availableVCSDiffModes: [OpenCodeVCSDiffMode] {
@@ -44,6 +88,9 @@ extension AppViewModel {
 
         Task {
             await loadGitViewDataIfNeeded()
+            if projectFilesMode == .tree {
+                await loadFileTreeIfNeeded()
+            }
         }
     }
 
@@ -59,11 +106,135 @@ extension AppViewModel {
         }
     }
 
+    func selectProjectFilesMode(_ mode: OpenCodeProjectFilesMode) {
+        guard projectFilesMode != mode else { return }
+
+        withAnimation(opencodeSelectionAnimation) {
+            directoryState.projectFilesMode = mode
+        }
+
+        if mode == .tree {
+            Task {
+                await loadFileTreeIfNeeded()
+            }
+        }
+    }
+
     func selectVCSFile(_ path: String) {
         withAnimation(opencodeSelectionAnimation) {
             selectedProjectContentTab = .git
             directoryState.selectedSession = nil
             directoryState.selectedVCSFile = path
+            directoryState.selectedProjectFilePath = path
+        }
+    }
+
+    func selectProjectFile(_ node: OpenCodeFileNode) {
+        guard !node.isDirectory else { return }
+
+        withAnimation(opencodeSelectionAnimation) {
+            selectedProjectContentTab = .git
+            directoryState.selectedSession = nil
+            directoryState.selectedProjectFilePath = node.absolute
+            if isChangedFile(node.absolute) {
+                directoryState.selectedVCSFile = node.absolute
+            } else {
+                directoryState.selectedVCSFile = nil
+            }
+        }
+
+        guard !isChangedFile(node.absolute) else { return }
+        Task {
+            await loadFileContentIfNeeded(for: node)
+        }
+    }
+
+    func toggleFileTreeDirectory(_ node: OpenCodeFileNode) {
+        guard node.isDirectory else { return }
+
+        if isExpandedDirectory(node.absolute) {
+            directoryState.expandedFileTreeDirectories.remove(node.absolute)
+            return
+        }
+
+        directoryState.expandedFileTreeDirectories.insert(node.absolute)
+        Task {
+            await loadFileTreeChildrenIfNeeded(for: node)
+        }
+    }
+
+    func loadFileTreeIfNeeded() async {
+        guard hasGitProject else { return }
+        guard directoryState.fileTreeRootNodes.isEmpty else { return }
+        await reloadFileTree(force: false)
+    }
+
+    func reloadFileTree(force: Bool) async {
+        guard hasGitProject, let directory = effectiveSelectedDirectory else { return }
+
+        directoryState.isLoadingFileTree = true
+        if force {
+            directoryState.fileTreeErrorMessage = nil
+        }
+        defer { directoryState.isLoadingFileTree = false }
+
+        do {
+            let nodes = try await client.listFiles(directory: directory, path: "")
+            let sorted = sortFileNodes(nodes)
+            directoryState.fileTreeRootNodes = sorted
+            directoryState.fileTreeChildrenByParentPath[""] = sorted
+            directoryState.fileTreeErrorMessage = nil
+        } catch {
+            directoryState.fileTreeErrorMessage = error.localizedDescription
+        }
+    }
+
+    func loadFileTreeChildrenIfNeeded(for node: OpenCodeFileNode) async {
+        guard node.isDirectory, directoryState.fileTreeChildrenByParentPath[node.absolute] == nil else { return }
+        await loadFileTreeChildren(for: node, force: false)
+    }
+
+    func loadFileTreeChildren(for node: OpenCodeFileNode, force: Bool) async {
+        guard node.isDirectory, let directory = effectiveSelectedDirectory else { return }
+        if !force, directoryState.fileTreeChildrenByParentPath[node.absolute] != nil {
+            return
+        }
+
+        directoryState.isLoadingFileTree = true
+        defer { directoryState.isLoadingFileTree = false }
+
+        do {
+            let nodes = try await client.listFiles(directory: directory, path: node.path)
+            directoryState.fileTreeChildrenByParentPath[node.absolute] = sortFileNodes(nodes)
+            directoryState.fileTreeErrorMessage = nil
+        } catch {
+            directoryState.fileTreeErrorMessage = error.localizedDescription
+        }
+    }
+
+    func loadFileContentIfNeeded(for node: OpenCodeFileNode) async {
+        guard !node.isDirectory else { return }
+        if directoryState.fileContentsByPath[node.absolute] != nil {
+            return
+        }
+        await loadFileContent(for: node, force: false)
+    }
+
+    func loadFileContent(for node: OpenCodeFileNode, force: Bool) async {
+        guard !node.isDirectory, let directory = effectiveSelectedDirectory else { return }
+        if !force, directoryState.fileContentsByPath[node.absolute] != nil {
+            return
+        }
+
+        directoryState.isLoadingSelectedFileContent = true
+        defer { directoryState.isLoadingSelectedFileContent = false }
+
+        do {
+            let content = try await client.readFileContent(directory: directory, path: node.path)
+            directoryState.fileContentsByPath[node.absolute] = content
+            directoryState.fileContentErrorMessage = nil
+        } catch {
+            directoryState.fileContentErrorMessage = error.localizedDescription
         }
     }
 
@@ -177,6 +348,68 @@ extension AppViewModel {
             return
         }
 
-        directoryState.selectedVCSFile = currentVCSDiffs.first?.file ?? directoryState.vcsFileStatuses.first?.path
+        let nextSelection = currentVCSDiffs.first?.file ?? directoryState.vcsFileStatuses.first?.path
+        directoryState.selectedVCSFile = nextSelection
+        if directoryState.selectedProjectFilePath == nil {
+            directoryState.selectedProjectFilePath = nextSelection
+        }
+    }
+
+    private func flattenFileTree(nodes: [OpenCodeFileNode], depth: Int) -> [FileTreeRow] {
+        var rows: [FileTreeRow] = []
+        for node in nodes {
+            rows.append(FileTreeRow(node: node, depth: depth))
+            guard node.isDirectory,
+                  isExpandedDirectory(node.absolute),
+                  let children = directoryState.fileTreeChildrenByParentPath[node.absolute] else {
+                continue
+            }
+            rows.append(contentsOf: flattenFileTree(nodes: children, depth: depth + 1))
+        }
+        return rows
+    }
+
+    private func sortFileNodes(_ nodes: [OpenCodeFileNode]) -> [OpenCodeFileNode] {
+        nodes.sorted { lhs, rhs in
+            if lhs.isDirectory != rhs.isDirectory {
+                return lhs.isDirectory && !rhs.isDirectory
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    private func matchesVCSPath(_ statusPath: String, toNodePath nodePath: String) -> Bool {
+        let normalizedStatus = normalizedComparablePath(statusPath)
+        let normalizedNode = normalizedComparablePath(nodePath)
+        return normalizedStatus == normalizedNode
+    }
+
+    private func isStatus(_ statusPath: String, withinDirectoryNode node: OpenCodeFileNode) -> Bool {
+        let statusComparable = normalizedComparablePath(statusPath)
+        let absoluteComparable = normalizedComparablePath(node.absolute)
+        let relativeComparable = normalizedComparablePath(node.path)
+
+        return statusComparable == absoluteComparable
+            || statusComparable == relativeComparable
+            || statusComparable.hasPrefix(absoluteComparable + "/")
+            || statusComparable.hasPrefix(relativeComparable + "/")
+    }
+
+    private func normalizedComparablePath(_ path: String) -> String {
+        var normalized = path.replacingOccurrences(of: "\\", with: "/")
+        while normalized.hasSuffix("/") && normalized.count > 1 {
+            normalized.removeLast()
+        }
+
+        if let directory = effectiveSelectedDirectory,
+           normalized.hasPrefix(directory + "/") {
+            return String(normalized.dropFirst(directory.count + 1))
+        }
+
+        if normalized == effectiveSelectedDirectory {
+            return ""
+        }
+
+        return normalized
     }
 }

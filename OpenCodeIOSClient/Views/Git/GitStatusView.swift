@@ -64,6 +64,18 @@ struct GitStatusView: View {
                 }
             }
 
+            Section {
+                Picker("Files Mode", selection: Binding(
+                    get: { viewModel.projectFilesMode },
+                    set: { viewModel.selectProjectFilesMode($0) }
+                )) {
+                    ForEach(OpenCodeProjectFilesMode.allCases, id: \.self) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
             if let errorMessage = viewModel.directoryState.vcsErrorMessage {
                 Section("Error") {
                     Text(errorMessage)
@@ -71,39 +83,32 @@ struct GitStatusView: View {
                 }
             }
 
-            Section(viewModel.selectedVCSDiffMode == .git ? "Working Tree" : "Branch Diff") {
-                if viewModel.directoryState.isLoadingVCS && viewModel.vcsFileStatuses.isEmpty {
-                    ProgressView("Loading changes")
-                } else if viewModel.vcsFileStatuses.isEmpty {
-                    Text("No changes")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(viewModel.vcsFileStatuses) { file in
-                        Button {
-                            viewModel.selectVCSFile(file.path)
-                            withAnimation(opencodeSelectionAnimation) {
-                                onFileChosen()
-                            }
-                        } label: {
-                            GitStatusRow(
-                                title: relativeTitle(for: file.path),
-                                subtitle: relativeSubtitle(for: file.path),
-                                status: file.status,
-                                additions: file.added,
-                                deletions: file.removed,
-                                selected: viewModel.selectedVCSFile == file.path
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .listRowBackground(viewModel.selectedVCSFile == file.path ? Color.blue.opacity(0.10) : Color.clear)
-                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                    }
+            if viewModel.projectFilesMode == .tree,
+               let treeError = viewModel.directoryState.fileTreeErrorMessage {
+                Section("File Tree Error") {
+                    Text(treeError)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            if viewModel.projectFilesMode == .changes {
+                Section(viewModel.selectedVCSDiffMode == .git ? "Working Tree" : "Branch Diff") {
+                    changesSectionContent
+                }
+            } else {
+                Section("Project Tree") {
+                    treeSectionContent
                 }
             }
         }
         .listStyle(.plain)
         .task {
             await viewModel.loadGitViewDataIfNeeded()
+        }
+        .task(id: viewModel.projectFilesMode) {
+            if viewModel.projectFilesMode == .tree {
+                await viewModel.loadFileTreeIfNeeded()
+            }
         }
         .animation(opencodeSelectionAnimation, value: statusIDs)
         .animation(opencodeSelectionAnimation, value: viewModel.selectedVCSFile ?? "")
@@ -119,6 +124,144 @@ struct GitStatusView: View {
         let components = relative.split(separator: "/")
         guard components.count > 1 else { return nil }
         return components.dropLast().joined(separator: "/")
+    }
+
+    @ViewBuilder
+    private var changesSectionContent: some View {
+        if viewModel.directoryState.isLoadingVCS && viewModel.vcsFileStatuses.isEmpty {
+            ProgressView("Loading changes")
+        } else if viewModel.vcsFileStatuses.isEmpty {
+            Text("No changes")
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(viewModel.vcsFileStatuses) { file in
+                Button {
+                    viewModel.selectVCSFile(file.path)
+                    withAnimation(opencodeSelectionAnimation) {
+                        onFileChosen()
+                    }
+                } label: {
+                    GitStatusRow(
+                        title: relativeTitle(for: file.path),
+                        subtitle: relativeSubtitle(for: file.path),
+                        status: file.status,
+                        additions: file.added,
+                        deletions: file.removed,
+                        selected: viewModel.selectedProjectFilePath == file.path
+                    )
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(viewModel.selectedProjectFilePath == file.path ? Color.blue.opacity(0.10) : Color.clear)
+                .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var treeSectionContent: some View {
+        if viewModel.directoryState.isLoadingFileTree && viewModel.visibleFileTreeRows.isEmpty {
+            ProgressView("Loading files")
+        } else if viewModel.visibleFileTreeRows.isEmpty {
+            Text("No files")
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(viewModel.visibleFileTreeRows) { row in
+                GitFileTreeRow(
+                    row: row,
+                    isExpanded: viewModel.isExpandedDirectory(row.node.absolute),
+                    isSelected: viewModel.selectedProjectFilePath == row.node.absolute,
+                    aggregateStatus: viewModel.aggregateStatus(for: row.node),
+                    onToggleDirectory: {
+                        viewModel.toggleFileTreeDirectory(row.node)
+                    },
+                    onSelectFile: {
+                        viewModel.selectProjectFile(row.node)
+                        withAnimation(opencodeSelectionAnimation) {
+                            onFileChosen()
+                        }
+                    }
+                )
+                .listRowBackground(viewModel.selectedProjectFilePath == row.node.absolute ? Color.blue.opacity(0.10) : Color.clear)
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+            }
+        }
+    }
+}
+
+private struct GitFileTreeRow: View {
+    let row: AppViewModel.FileTreeRow
+    let isExpanded: Bool
+    let isSelected: Bool
+    let aggregateStatus: OpenCodeVCSAggregateStatus?
+    let onToggleDirectory: () -> Void
+    let onSelectFile: () -> Void
+
+    var body: some View {
+        Group {
+            if row.node.isDirectory {
+                Button(action: onToggleDirectory) {
+                    content
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button(action: onSelectFile) {
+                    content
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private var content: some View {
+        HStack(spacing: 10) {
+            Color.clear.frame(width: CGFloat(row.depth) * 14)
+
+            if row.node.isDirectory {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 12)
+                Image(systemName: "folder")
+                    .foregroundStyle(aggregateStatus?.hasChanges == true ? statusColor : .secondary)
+            } else {
+                Color.clear.frame(width: 12)
+                Image(systemName: "doc.text")
+                    .foregroundStyle(aggregateStatus == nil ? .secondary : statusColor)
+            }
+
+            Text(row.node.name)
+                .font(.body.weight(isSelected ? .semibold : .regular))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            if let aggregateStatus {
+                HStack(spacing: 6) {
+                    if row.node.isDirectory {
+                        Text("\(aggregateStatus.fileCount)")
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("+\(aggregateStatus.additions)")
+                        .foregroundStyle(.green)
+                    Text("-\(aggregateStatus.deletions)")
+                        .foregroundStyle(.red)
+                }
+                .font(.caption.monospacedDigit())
+            }
+        }
+        .padding(.vertical, 2)
+        .contentShape(Rectangle())
+    }
+
+    private var statusColor: Color {
+        if let aggregateStatus, aggregateStatus.deletions > 0, aggregateStatus.additions == 0 {
+            return .red
+        }
+        if let aggregateStatus, aggregateStatus.additions > 0, aggregateStatus.deletions == 0 {
+            return .green
+        }
+        return .orange
     }
 }
 

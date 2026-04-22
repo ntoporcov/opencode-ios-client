@@ -51,6 +51,7 @@ struct HealthResponse: Codable {
 struct OpenCodeSession: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let title: String?
+    let workspaceID: String?
     let directory: String?
     let projectID: String?
     let parentID: String?
@@ -63,6 +64,7 @@ struct OpenCodeSession: Codable, Identifiable, Hashable, Sendable {
         OpenCodeSession(
             id: incoming.id,
             title: incoming.title ?? title,
+            workspaceID: incoming.workspaceID ?? workspaceID,
             directory: incoming.directory ?? directory,
             projectID: incoming.projectID ?? projectID,
             parentID: incoming.parentID ?? parentID
@@ -94,6 +96,18 @@ struct OpenCodeFileNode: Codable, Hashable, Sendable {
     let absolute: String
     let type: String
     let ignored: Bool?
+
+    var isDirectory: Bool {
+        type == "directory"
+    }
+}
+
+struct OpenCodeFileContent: Codable, Hashable, Sendable {
+    let type: String
+    let content: String
+    let diff: String?
+    let encoding: String?
+    let mimeType: String?
 }
 
 struct OpenCodeMessageEnvelope: Codable, Identifiable, Hashable, Sendable {
@@ -247,7 +261,7 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
     }
 
     func asSession() -> OpenCodeSession {
-        OpenCodeSession(id: id, title: title, directory: directory, projectID: projectID, parentID: parentID)
+        OpenCodeSession(id: id, title: title, workspaceID: nil, directory: directory, projectID: projectID, parentID: parentID)
     }
 }
 
@@ -308,8 +322,32 @@ struct OpenCodeDirectoryState: Equatable, Sendable {
     var vcsDiffsByMode: [OpenCodeVCSDiffMode: [OpenCodeVCSFileDiff]] = [:]
     var selectedVCSMode: OpenCodeVCSDiffMode = .git
     var selectedVCSFile: String?
+    var projectFilesMode: OpenCodeProjectFilesMode = .changes
+    var fileTreeRootNodes: [OpenCodeFileNode] = []
+    var fileTreeChildrenByParentPath: [String: [OpenCodeFileNode]] = [:]
+    var expandedFileTreeDirectories: Set<String> = []
+    var selectedProjectFilePath: String?
+    var fileContentsByPath: [String: OpenCodeFileContent] = [:]
+    var isLoadingFileTree = false
+    var isLoadingSelectedFileContent = false
+    var fileTreeErrorMessage: String?
+    var fileContentErrorMessage: String?
     var isLoadingVCS = false
     var vcsErrorMessage: String?
+}
+
+enum OpenCodeProjectFilesMode: String, CaseIterable, Hashable, Sendable {
+    case changes
+    case tree
+
+    var title: String {
+        switch self {
+        case .changes:
+            return "Changes"
+        case .tree:
+            return "Tree"
+        }
+    }
 }
 
 enum OpenCodeVCSDiffMode: String, CaseIterable, Codable, Hashable, Sendable {
@@ -319,7 +357,7 @@ enum OpenCodeVCSDiffMode: String, CaseIterable, Codable, Hashable, Sendable {
     var title: String {
         switch self {
         case .git:
-            return "Git"
+            return "Working Tree"
         case .branch:
             return "Branch"
         }
@@ -359,6 +397,16 @@ struct OpenCodeVCSSummary: Hashable, Sendable {
     let fileCount: Int
     let additions: Int
     let deletions: Int
+}
+
+struct OpenCodeVCSAggregateStatus: Hashable, Sendable {
+    let fileCount: Int
+    let additions: Int
+    let deletions: Int
+
+    var hasChanges: Bool {
+        fileCount > 0 || additions > 0 || deletions > 0
+    }
 }
 
 struct OpenCodeVCSIntensityFile: Hashable, Identifiable, Sendable {
@@ -850,6 +898,7 @@ enum OpenCodePreviewData {
     static let primarySession = OpenCodeSession(
         id: "session-preview-main",
         title: "Preview polish pass",
+        workspaceID: nil,
         directory: repoProject.worktree,
         projectID: repoProject.id,
         parentID: nil
@@ -858,6 +907,7 @@ enum OpenCodePreviewData {
     static let secondarySession = OpenCodeSession(
         id: "session-preview-followup",
         title: "Streaming cleanup",
+        workspaceID: nil,
         directory: repoProject.worktree,
         projectID: repoProject.id,
         parentID: nil

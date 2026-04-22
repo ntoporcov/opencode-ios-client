@@ -15,7 +15,7 @@ struct ProjectContentView: View {
             if viewModel.hasGitProject {
                 GitStatusView(viewModel: viewModel, onFileChosen: onDetailChosen)
                     .tabItem {
-                        Label(AppViewModel.ProjectContentTab.git.title, systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+                        Label(AppViewModel.ProjectContentTab.git.title, systemImage: "doc.on.doc")
                     }
                     .tag(AppViewModel.ProjectContentTab.git)
             }
@@ -70,7 +70,7 @@ struct ProjectContentView: View {
         case .sessions:
             return "Create Session"
         case .git:
-            return "Refresh Git"
+            return viewModel.projectFilesMode == .tree ? "Refresh File Tree" : "Refresh Files"
         }
     }
 
@@ -88,7 +88,7 @@ struct ProjectContentView: View {
         case .sessions:
             return false
         case .git:
-            return viewModel.directoryState.isLoadingVCS
+            return viewModel.directoryState.isLoadingVCS || viewModel.directoryState.isLoadingFileTree
         }
     }
 
@@ -98,7 +98,12 @@ struct ProjectContentView: View {
             viewModel.presentCreateSessionSheet()
         case .git:
             Task {
-                await viewModel.reloadGitViewData(force: true)
+                if viewModel.projectFilesMode == .tree {
+                    await viewModel.reloadGitViewData(force: true)
+                    await viewModel.reloadFileTree(force: true)
+                } else {
+                    await viewModel.reloadGitViewData(force: true)
+                }
             }
         }
     }

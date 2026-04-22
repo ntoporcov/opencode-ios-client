@@ -21,7 +21,11 @@ struct RootView: View {
                     }
                 } detail: {
                     if viewModel.selectedProjectContentTab == .git, viewModel.hasGitProject {
-                        GitDiffView(viewModel: viewModel)
+                        if viewModel.selectedProjectFileIsChanged {
+                            GitDiffView(viewModel: viewModel)
+                        } else {
+                            ProjectFileContentView(viewModel: viewModel)
+                        }
                     } else if let session = viewModel.selectedSession {
                         ChatView(viewModel: viewModel, sessionID: session.id)
                             .id(session.id)

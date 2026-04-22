@@ -41,6 +41,69 @@ struct GitDiffView: View {
 
 }
 
+struct ProjectFileContentView: View {
+    @ObservedObject var viewModel: AppViewModel
+
+    var body: some View {
+        Group {
+            if !viewModel.hasGitProject {
+                ContentUnavailableView("Files Unavailable", systemImage: "doc")
+            } else if let path = viewModel.selectedProjectFilePath,
+                      let content = viewModel.selectedProjectFileContent {
+                fileContent(content, path: path)
+                    .navigationTitle(fileTitle(for: path))
+                    .opencodeInlineNavigationTitle()
+            } else if viewModel.directoryState.isLoadingSelectedFileContent,
+                      let path = viewModel.selectedProjectFilePath {
+                ContentUnavailableView(
+                    "Loading File",
+                    systemImage: "doc.text",
+                    description: Text(viewModel.relativeGitPath(path))
+                )
+            } else if let error = viewModel.directoryState.fileContentErrorMessage,
+                      let path = viewModel.selectedProjectFilePath {
+                ContentUnavailableView(
+                    "Preview Unavailable",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text("\(viewModel.relativeGitPath(path))\n\n\(error)")
+                )
+            } else if let path = viewModel.selectedProjectFilePath {
+                ContentUnavailableView(
+                    "Select a File",
+                    systemImage: "doc",
+                    description: Text(viewModel.relativeGitPath(path))
+                )
+            } else {
+                ContentUnavailableView("Select a File", systemImage: "doc")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func fileContent(_ content: OpenCodeFileContent, path: String) -> some View {
+        if content.type == "binary" {
+            ContentUnavailableView(
+                "Binary File",
+                systemImage: "doc.fill",
+                description: Text(viewModel.relativeGitPath(path))
+            )
+        } else {
+            ScrollView([.vertical, .horizontal]) {
+                Text(verbatim: content.content)
+                    .font(.system(.footnote, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .textSelection(.enabled)
+            }
+            .background(OpenCodePlatformColor.groupedBackground)
+        }
+    }
+
+    private func fileTitle(for path: String) -> String {
+        viewModel.relativeGitPath(path).split(separator: "/").last.map(String.init) ?? path
+    }
+}
+
 struct OpenCodeUnifiedDiffData: Identifiable, Hashable, Sendable {
     let file: String
     let patch: String

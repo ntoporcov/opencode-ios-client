@@ -100,9 +100,18 @@ extension AppViewModel {
 
     func stopCurrentSession() async {
         guard let selectedSession else { return }
+        let requestDirectory = sendDirectory(for: selectedSession)
 
         do {
-            try await client.abortSession(sessionID: selectedSession.id)
+            appendDebugLog(
+                "abort request session=\(debugSessionLabel(selectedSession)) directory=\(debugDirectoryLabel(requestDirectory)) workspace=\(selectedSession.workspaceID ?? "nil")"
+            )
+            try await client.abortSession(
+                sessionID: selectedSession.id,
+                directory: requestDirectory,
+                workspaceID: selectedSession.workspaceID
+            )
+            appendDebugLog("abort accepted session=\(debugSessionLabel(selectedSession))")
         } catch {
             appendDebugLog("abort error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription

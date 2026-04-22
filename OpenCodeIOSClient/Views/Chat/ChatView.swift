@@ -1,14 +1,10 @@
 import SwiftUI
-#if canImport(UIKit)
-import UIKit
-#endif
 
 struct ChatView: View {
     @ObservedObject var viewModel: AppViewModel
     let sessionID: String
 
     @Namespace private var toolbarGlassNamespace
-    @State private var keyboardHeight: CGFloat = 0
     @State private var copiedDebugLog = false
     @State private var selectedActivityDetail: ActivityDetail?
     @State private var showingTodoInspector = false
@@ -17,13 +13,9 @@ struct ChatView: View {
     @State private var hasSnappedInitially = false
     @State private var questionAnswers: [String: Set<String>] = [:]
     @State private var questionCustomAnswers: [String: String] = [:]
-    @State private var keyboardScrollTask: Task<Void, Never>?
+    @State private var autoScrollTask: Task<Void, Never>?
 
     private let messageWindowSize = 10
-    private var displayedMessageIDs: String {
-        displayedMessages.map { $0.id }.joined(separator: "|")
-    }
-
     private var todoIDs: String {
         viewModel.todos.map { $0.id }.joined(separator: "|")
     }
@@ -34,6 +26,15 @@ struct ChatView: View {
 
     private var questionIDs: String {
         viewModel.selectedSessionQuestions.map { $0.id }.joined(separator: "|")
+    }
+
+    private var bottomContentSignature: String {
+        [
+            displayedMessages.last?.id ?? "none",
+            String(lastMessageTextLength),
+            shouldShowThinking ? "thinking" : "idle",
+            composerMode
+        ].joined(separator: "|")
     }
 
     private var liveSession: OpenCodeSession {
@@ -82,8 +83,11 @@ struct ChatView: View {
 
                         if shouldShowThinking {
                             ThinkingRow()
-                                .id("thinking-row")
                         }
+
+                        Color.clear
+                            .frame(height: 1)
+                            .id("chat-bottom-anchor")
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
@@ -101,7 +105,7 @@ struct ChatView: View {
                         visibleMessageCount = min(viewModel.messages.count, messageWindowSize)
                         hasLoadedInitialWindow = true
                     }
-                    scrollToBottom(with: proxy, animated: false)
+                    scheduleScrollToBottom(with: proxy, animated: false)
                 }
                 .onChange(of: viewModel.messages.count) { _, count in
                     if !hasLoadedInitialWindow {
@@ -113,31 +117,16 @@ struct ChatView: View {
                 }
                 .onChange(of: visibleMessageCount) { _, _ in
                     if !hasSnappedInitially {
-                        scrollToBottom(with: proxy, animated: false)
+                        scheduleScrollToBottom(with: proxy, animated: false)
                         hasSnappedInitially = true
                     }
                 }
-                .onChange(of: displayedMessages.last?.id) { _, _ in
-                    scrollToBottom(with: proxy, animated: hasSnappedInitially)
-                }
-                .onChange(of: messageContentVersion) { _, _ in
-                    scrollToBottom(with: proxy, animated: hasSnappedInitially)
-                }
-                .onChange(of: shouldShowThinking) { _, _ in
-                    scrollToBottom(with: proxy, animated: hasSnappedInitially)
-                }
-                .onChange(of: keyboardHeight) { _, newValue in
-                    keyboardScrollTask?.cancel()
-                    guard newValue > 0 else { return }
+                .onChange(of: bottomContentSignature) { oldValue, newValue in
+                    guard hasLoadedInitialWindow else { return }
 
-                    scrollToBottom(with: proxy, animated: true)
-                    keyboardScrollTask = Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(180))
-                        guard !Task.isCancelled else { return }
-                        scrollToBottom(with: proxy, animated: false)
-                    }
+                    let shouldAnimate = hasSnappedInitially && bottomMessageID(from: oldValue) != bottomMessageID(from: newValue)
+                    scheduleScrollToBottom(with: proxy, animated: shouldAnimate)
                 }
-                .modifier(OpenCodeKeyboardObserver(geometry: geometry, keyboardHeight: $keyboardHeight, keyboardScrollTask: $keyboardScrollTask))
             }
         }
         .navigationTitle(liveSession.title ?? "Session")
@@ -222,13 +211,18 @@ struct ChatView: View {
         .animation(opencodeSelectionAnimation, value: questionIDs)
     }
 
+    private func scheduleScrollToBottom(with proxy: ScrollViewProxy, animated: Bool) {
+        autoScrollTask?.cancel()
+        autoScrollTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled else { return }
+            scrollToBottom(with: proxy, animated: animated)
+        }
+    }
+
     private func scrollToBottom(with proxy: ScrollViewProxy, animated: Bool) {
         let action = {
-            if shouldShowThinking {
-                proxy.scrollTo("thinking-row", anchor: .bottom)
-            } else if let lastMessageID = displayedMessages.last?.id {
-                proxy.scrollTo(lastMessageID, anchor: .bottom)
-            }
+            proxy.scrollTo("chat-bottom-anchor", anchor: .bottom)
         }
 
         if animated {
@@ -240,11 +234,10 @@ struct ChatView: View {
 
     private var messageBottomPadding: CGFloat { 96 }
 
-    private var messageContentVersion: String {
-        displayedMessages.map { message in
-            let text = message.parts.compactMap { $0.text }.joined(separator: "|")
-            return "\(message.id):\(text)"
-        }.joined(separator: "||")
+    private var lastMessageTextLength: Int {
+        displayedMessages.last?.parts.reduce(0) { partialResult, part in
+            partialResult + (part.text?.count ?? 0)
+        } ?? 0
     }
 
     private var displayedMessages: ArraySlice<OpenCodeMessageEnvelope> {
@@ -253,6 +246,26 @@ struct ChatView: View {
 
     private var hiddenMessageCount: Int {
         max(0, viewModel.messages.count - displayedMessages.count)
+    }
+
+    private var composerMode: String {
+        if !viewModel.selectedSessionPermissions.isEmpty {
+            return "permissions"
+        }
+
+        if !viewModel.selectedSessionQuestions.isEmpty {
+            return "questions"
+        }
+
+        if viewModel.todos.contains(where: { !$0.isComplete }) {
+            return "todos"
+        }
+
+        return "composer"
+    }
+
+    private func bottomMessageID(from signature: String) -> String {
+        signature.split(separator: "|", omittingEmptySubsequences: false).first.map(String.init) ?? ""
     }
 
     private var shouldShowThinking: Bool {
@@ -296,36 +309,4 @@ struct ChatView: View {
             ModelToolbarMenu(viewModel: viewModel, session: liveSession, glassNamespace: toolbarGlassNamespace)
         }
     }
-}
-
-private struct OpenCodeKeyboardObserver: ViewModifier {
-    let geometry: GeometryProxy
-    @Binding var keyboardHeight: CGFloat
-    @Binding var keyboardScrollTask: Task<Void, Never>?
-
-    func body(content: Content) -> some View {
-#if canImport(UIKit)
-        content
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-                keyboardHeight = keyboardHeight(from: notification)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                keyboardScrollTask?.cancel()
-                keyboardHeight = 0
-            }
-#else
-        content
-#endif
-    }
-
-#if canImport(UIKit)
-    private func keyboardHeight(from notification: Notification) -> CGFloat {
-        guard let value = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return 0
-        }
-
-        let overlap = geometry.frame(in: .global).maxY - value.minY
-        return max(0, overlap)
-    }
-#endif
 }

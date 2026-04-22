@@ -68,6 +68,13 @@ struct OpenCodeAPIClient {
         ])
     }
 
+    func readFileContent(directory: String, path: String) async throws -> OpenCodeFileContent {
+        return try await send(path: "/file/content", method: "GET", queryItems: [
+            URLQueryItem(name: "directory", value: directory),
+            URLQueryItem(name: "path", value: path),
+        ])
+    }
+
     func getVCSInfo(directory: String? = nil) async throws -> OpenCodeVCSInfo {
         let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
         return try await send(path: "/vcs", method: "GET", queryItems: queryItems)
@@ -186,8 +193,12 @@ struct OpenCodeAPIClient {
         try await sendNoContent(path: "/session/\(sessionID)/prompt_async", method: "POST", queryItems: queryItems, body: payload, directoryHeader: directory)
     }
 
-    func abortSession(sessionID: String) async throws {
-        try await sendNoContent(path: "/session/\(sessionID)/abort", method: "POST")
+    func abortSession(sessionID: String, directory: String? = nil, workspaceID: String? = nil) async throws {
+        var queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
+        if let workspaceID, !workspaceID.isEmpty {
+            queryItems.append(URLQueryItem(name: "workspace", value: workspaceID))
+        }
+        try await sendNoContent(path: "/session/\(sessionID)/abort", method: "POST", queryItems: queryItems, directoryHeader: directory)
     }
 
     func eventURLs(directory: String?) throws -> [URL] {
@@ -282,6 +293,18 @@ struct OpenCodeAPIClient {
 
     private func sendNoContent<Body: Encodable>(path: String, method: String, queryItems: [URLQueryItem], body: Body, directoryHeader: String?) async throws {
         let request = try makeRequest(path: path, method: method, queryItems: queryItems, body: body, directoryHeader: directoryHeader)
+        let (_, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw OpenCodeAPIError.invalidResponse
+        }
+        debugLog(response: http, for: request, body: nil)
+        guard (200 ..< 300).contains(http.statusCode) else {
+            throw OpenCodeAPIError.httpError(http.statusCode, "")
+        }
+    }
+
+    private func sendNoContent(path: String, method: String, queryItems: [URLQueryItem], directoryHeader: String?) async throws {
+        let request = try makeRequest(path: path, method: method, queryItems: queryItems, directoryHeader: directoryHeader)
         let (_, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw OpenCodeAPIError.invalidResponse

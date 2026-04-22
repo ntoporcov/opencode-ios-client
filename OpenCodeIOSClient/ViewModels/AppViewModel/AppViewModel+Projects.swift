@@ -171,6 +171,16 @@ extension AppViewModel {
             directoryState.vcsDiffsByMode = [:]
             directoryState.selectedVCSMode = .git
             directoryState.selectedVCSFile = nil
+            directoryState.projectFilesMode = .changes
+            directoryState.fileTreeRootNodes = []
+            directoryState.fileTreeChildrenByParentPath = [:]
+            directoryState.expandedFileTreeDirectories = []
+            directoryState.selectedProjectFilePath = nil
+            directoryState.fileContentsByPath = [:]
+            directoryState.isLoadingFileTree = false
+            directoryState.isLoadingSelectedFileContent = false
+            directoryState.fileTreeErrorMessage = nil
+            directoryState.fileContentErrorMessage = nil
             directoryState.vcsErrorMessage = nil
         }
         do {

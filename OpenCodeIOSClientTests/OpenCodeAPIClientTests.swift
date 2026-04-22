@@ -47,7 +47,12 @@ final class OpenCodeAPIClientTests: XCTestCase {
 
         MockURLProtocol.requestHandler = { request in
             XCTAssertEqual(request.url?.path, "/session/ses_test/abort")
+            XCTAssertEqual(URLComponents(url: try XCTUnwrap(request.url), resolvingAgainstBaseURL: false)?.queryItems, [
+                URLQueryItem(name: "directory", value: "/tmp/project"),
+                URLQueryItem(name: "workspace", value: "ws_123"),
+            ])
             XCTAssertEqual(request.httpMethod, "POST")
+            XCTAssertEqual(request.value(forHTTPHeaderField: "x-opencode-directory"), "/tmp/project")
             expectation.fulfill()
 
             return (
@@ -56,7 +61,7 @@ final class OpenCodeAPIClientTests: XCTestCase {
             )
         }
 
-        try await client.abortSession(sessionID: "ses_test")
+        try await client.abortSession(sessionID: "ses_test", directory: "/tmp/project", workspaceID: "ws_123")
         await fulfillment(of: [expectation], timeout: 1)
     }
 

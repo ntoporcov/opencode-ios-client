@@ -14,7 +14,7 @@ final class AppViewModel: ObservableObject {
             case .sessions:
                 return "Sessions"
             case .git:
-                return "Git"
+                return "Files"
             }
         }
     }
@@ -110,6 +110,15 @@ final class AppViewModel: ObservableObject {
     var questions: [OpenCodeQuestionRequest] { directoryState.questions }
     var vcsInfo: OpenCodeVCSInfo? { directoryState.vcsInfo }
     var vcsFileStatuses: [OpenCodeVCSFileStatus] { directoryState.vcsFileStatuses }
+    var projectFilesMode: OpenCodeProjectFilesMode {
+        get { directoryState.projectFilesMode }
+        set { directoryState.projectFilesMode = newValue }
+    }
+    var fileTreeRootNodes: [OpenCodeFileNode] { directoryState.fileTreeRootNodes }
+    var selectedProjectFilePath: String? {
+        get { directoryState.selectedProjectFilePath }
+        set { directoryState.selectedProjectFilePath = newValue }
+    }
     var selectedVCSDiffMode: OpenCodeVCSDiffMode {
         get { directoryState.selectedVCSMode }
         set { directoryState.selectedVCSMode = newValue }
@@ -120,8 +129,17 @@ final class AppViewModel: ObservableObject {
     }
     var hasGitProject: Bool { currentProject?.vcs == "git" && effectiveSelectedDirectory != nil }
     var currentVCSDiffs: [OpenCodeVCSFileDiff] { directoryState.vcsDiffsByMode[selectedVCSDiffMode] ?? [] }
+    var selectedProjectFileContent: OpenCodeFileContent? {
+        guard let selectedProjectFilePath else { return nil }
+        return directoryState.fileContentsByPath[selectedProjectFilePath]
+    }
     var selectedVCSFileDiff: OpenCodeVCSFileDiff? {
-        guard let selectedVCSFile else { return nil }
-        return currentVCSDiffs.first { $0.file == selectedVCSFile }
+        let path = selectedProjectFilePath ?? selectedVCSFile
+        guard let path else { return nil }
+        return currentVCSDiffs.first { $0.file == path }
+    }
+    var selectedProjectFileIsChanged: Bool {
+        guard let selectedProjectFilePath else { return false }
+        return vcsFileStatuses.contains { $0.path == selectedProjectFilePath }
     }
 }
