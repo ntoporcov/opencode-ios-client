@@ -23,9 +23,7 @@ struct ChatDebugProbeSheet: View {
                         .disabled(viewModel.isRunningDebugProbe)
 
                         Button(copiedDebugLog ? "Copied" : "Copy Log") {
-                            #if canImport(UIKit)
-                            UIPasteboard.general.string = viewModel.copyDebugProbeLog()
-                            #endif
+                            OpenCodeClipboard.copy(viewModel.copyDebugProbeLog())
                             copiedDebugLog = true
                         }
                         .buttonStyle(.bordered)
@@ -43,14 +41,14 @@ struct ChatDebugProbeSheet: View {
                         .padding()
                         .accessibilityIdentifier("debugProbe.log")
                 }
-                .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .padding(.horizontal)
             }
             .padding(.vertical)
             .navigationTitle("Debug Probe")
-            .navigationBarTitleDisplayMode(.inline)
+            .opencodeInlineNavigationTitle()
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .opencodeLeading) {
                     Button("Close") {
                         viewModel.isShowingDebugProbe = false
                     }

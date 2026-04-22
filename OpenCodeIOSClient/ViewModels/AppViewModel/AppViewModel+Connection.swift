@@ -16,6 +16,7 @@ extension AppViewModel {
             loadNewSessionDefaults()
             projects = bootstrap.projects
             selectedDirectory = directorySelection(for: bootstrap.currentProject)
+            selectedProjectContentTab = .sessions
             reconcileCurrentProjectSelection(serverProject: bootstrap.currentProject)
             try await reloadSessions()
             await loadComposerOptions()
@@ -37,6 +38,7 @@ extension AppViewModel {
         projects = []
         currentProject = nil
         selectedDirectory = nil
+        selectedProjectContentTab = .sessions
         projectSearchQuery = ""
         projectSearchResults = []
         directoryState = OpenCodeDirectoryState()

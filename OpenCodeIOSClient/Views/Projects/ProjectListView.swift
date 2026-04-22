@@ -37,7 +37,7 @@ struct ProjectListView: View {
         .listStyle(.sidebar)
         .navigationTitle("Projects")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .opencodeTrailing) {
                 Button {
                     viewModel.presentConfigurationsSheet()
                 } label: {
@@ -47,7 +47,7 @@ struct ProjectListView: View {
                 .accessibilityIdentifier("projects.configurations")
             }
 
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .opencodeTrailing) {
                 Button {
                     viewModel.presentCreateProjectSheet()
                 } label: {

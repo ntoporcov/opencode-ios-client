@@ -41,18 +41,6 @@ struct SessionListView: View {
             }
         }
         .listStyle(.plain)
-        .navigationTitle(viewModel.projectScopeTitle.split(separator: "/").last.map(String.init) ?? viewModel.projectScopeTitle)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    viewModel.presentCreateSessionSheet()
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                }
-                .accessibilityLabel("Create Session")
-                .accessibilityIdentifier("sessions.create")
-            }
-        }
         .sheet(isPresented: $viewModel.isShowingCreateSessionSheet) {
             CreateSessionSheet(viewModel: viewModel)
         }

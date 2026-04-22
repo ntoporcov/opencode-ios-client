@@ -63,7 +63,7 @@ struct ChatView: View {
                                     .foregroundStyle(.blue)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 10)
-                                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
+                                    .background(OpenCodePlatformColor.secondaryGroupedBackground, in: Capsule())
                             }
                             .buttonStyle(.plain)
                             .padding(.bottom, 4)
@@ -90,8 +90,8 @@ struct ChatView: View {
                     .padding(.bottom, messageBottomPadding)
                 }
                 .defaultScrollAnchor(.bottom)
-                .scrollDismissesKeyboard(.interactively)
-                .background(Color(uiColor: .systemGroupedBackground))
+                .opencodeInteractiveKeyboardDismiss()
+                .background(OpenCodePlatformColor.groupedBackground)
                 .accessibilityIdentifier("chat.scroll")
                 .safeAreaInset(edge: .bottom) {
                     composerStack
@@ -137,17 +137,11 @@ struct ChatView: View {
                         scrollToBottom(with: proxy, animated: false)
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-                    keyboardHeight = keyboardHeight(from: notification, geometry: geometry)
-                }
-                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                    keyboardScrollTask?.cancel()
-                    keyboardHeight = 0
-                }
+                .modifier(OpenCodeKeyboardObserver(geometry: geometry, keyboardHeight: $keyboardHeight, keyboardScrollTask: $keyboardScrollTask))
             }
         }
         .navigationTitle(liveSession.title ?? "Session")
-        .navigationBarTitleDisplayMode(.inline)
+        .opencodeInlineNavigationTitle()
         .toolbar { chatToolbar }
 #if DEBUG
         .sheet(isPresented: $viewModel.isShowingDebugProbe) {
@@ -244,15 +238,6 @@ struct ChatView: View {
         }
     }
 
-    private func keyboardHeight(from notification: Notification, geometry: GeometryProxy) -> CGFloat {
-        guard let value = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return 0
-        }
-
-        let overlap = geometry.frame(in: .global).maxY - value.minY
-        return max(0, overlap)
-    }
-
     private var messageBottomPadding: CGFloat { 96 }
 
     private var messageContentVersion: String {
@@ -297,16 +282,50 @@ struct ChatView: View {
 
     @ToolbarContentBuilder
     private var chatToolbar: some ToolbarContent {
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .opencodeTrailing) {
             AgentToolbarMenu(viewModel: viewModel, session: liveSession, glassNamespace: toolbarGlassNamespace)
         }
 
+        #if !os(macOS)
         if #available(iOS 26.0, *) {
             ToolbarSpacer(.flexible, placement: .topBarTrailing)
         }
+        #endif
 
-        ToolbarItem(placement: .topBarTrailing) {
+        ToolbarItem(placement: .opencodeTrailing) {
             ModelToolbarMenu(viewModel: viewModel, session: liveSession, glassNamespace: toolbarGlassNamespace)
         }
     }
+}
+
+private struct OpenCodeKeyboardObserver: ViewModifier {
+    let geometry: GeometryProxy
+    @Binding var keyboardHeight: CGFloat
+    @Binding var keyboardScrollTask: Task<Void, Never>?
+
+    func body(content: Content) -> some View {
+#if canImport(UIKit)
+        content
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
+                keyboardHeight = keyboardHeight(from: notification)
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardScrollTask?.cancel()
+                keyboardHeight = 0
+            }
+#else
+        content
+#endif
+    }
+
+#if canImport(UIKit)
+    private func keyboardHeight(from notification: Notification) -> CGFloat {
+        guard let value = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+            return 0
+        }
+
+        let overlap = geometry.frame(in: .global).maxY - value.minY
+        return max(0, overlap)
+    }
+#endif
 }

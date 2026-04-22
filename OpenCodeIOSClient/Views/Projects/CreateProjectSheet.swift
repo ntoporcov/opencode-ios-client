@@ -8,7 +8,7 @@ struct CreateProjectSheet: View {
             List {
                 Section("Directory") {
                     TextField("Search under \(viewModel.defaultSearchRoot)", text: $viewModel.createProjectQuery)
-                        .textInputAutocapitalization(.never)
+                        .opencodeDisableTextAutocapitalization()
                         .autocorrectionDisabled()
                         .onChange(of: viewModel.createProjectQuery) { _, _ in
                             Task { await viewModel.searchCreateProjectDirectories() }
@@ -65,14 +65,14 @@ struct CreateProjectSheet: View {
                 }
             }
             .navigationTitle("Create Project")
-            .navigationBarTitleDisplayMode(.inline)
+            .opencodeInlineNavigationTitle()
             .onAppear {
                 if viewModel.createProjectResults.isEmpty {
                     Task { await viewModel.searchCreateProjectDirectories() }
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .opencodeLeading) {
                     Button("Cancel") {
                         viewModel.isShowingCreateProjectSheet = false
                     }

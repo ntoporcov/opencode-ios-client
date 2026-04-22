@@ -44,6 +44,6 @@ struct ActivityRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }

@@ -2,6 +2,7 @@
 
 # Xcode / SwiftPM build output
 DerivedData/
+.derivedData/
 build/
 BuildDevice/
 *.xcresult/

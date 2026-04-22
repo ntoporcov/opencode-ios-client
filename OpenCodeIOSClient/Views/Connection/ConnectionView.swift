@@ -36,13 +36,13 @@ struct ConnectionView: View {
 
             Section("Server") {
                 TextField("Base URL", text: $viewModel.config.baseURL)
-                    .textInputAutocapitalization(.never)
+                    .opencodeDisableTextAutocapitalization()
                     .autocorrectionDisabled()
-                    .keyboardType(.URL)
+                    .opencodeURLKeyboardType()
                     .accessibilityIdentifier("connection.baseURL")
 
                 TextField("Username", text: $viewModel.config.username)
-                    .textInputAutocapitalization(.never)
+                    .opencodeDisableTextAutocapitalization()
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("connection.username")
 
@@ -66,7 +66,7 @@ struct ConnectionView: View {
                 }
             }
         }
-        .listStyle(.insetGrouped)
-        .navigationBarTitleDisplayMode(.large)
+        .opencodeGroupedListStyle()
+        .opencodeLargeNavigationTitle()
     }
 }

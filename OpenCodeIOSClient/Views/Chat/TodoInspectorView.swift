@@ -62,9 +62,9 @@ struct TodoInspectorView: View {
             }
         }
         .navigationTitle("Todos")
-        .navigationBarTitleDisplayMode(.inline)
+        .opencodeInlineNavigationTitle()
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .opencodeTrailing) {
                 Button(isLoading ? "Refreshing..." : "Refresh") {
                     Task { await refresh() }
                 }

@@ -303,6 +303,56 @@ struct OpenCodeDirectoryState: Equatable, Sendable {
     var todos: [OpenCodeTodo] = []
     var permissions: [OpenCodePermission] = []
     var questions: [OpenCodeQuestionRequest] = []
+    var vcsInfo: OpenCodeVCSInfo?
+    var vcsFileStatuses: [OpenCodeVCSFileStatus] = []
+    var vcsDiffsByMode: [OpenCodeVCSDiffMode: [OpenCodeVCSFileDiff]] = [:]
+    var selectedVCSMode: OpenCodeVCSDiffMode = .git
+    var selectedVCSFile: String?
+    var isLoadingVCS = false
+    var vcsErrorMessage: String?
+}
+
+enum OpenCodeVCSDiffMode: String, CaseIterable, Codable, Hashable, Sendable {
+    case git
+    case branch
+
+    var title: String {
+        switch self {
+        case .git:
+            return "Git"
+        case .branch:
+            return "Branch"
+        }
+    }
+}
+
+struct OpenCodeVCSInfo: Codable, Hashable, Sendable {
+    let branch: String?
+    let defaultBranch: String?
+
+    enum CodingKeys: String, CodingKey {
+        case branch
+        case defaultBranch = "default_branch"
+    }
+}
+
+struct OpenCodeVCSFileStatus: Codable, Hashable, Identifiable, Sendable {
+    let path: String
+    let added: Int
+    let removed: Int
+    let status: String
+
+    var id: String { path }
+}
+
+struct OpenCodeVCSFileDiff: Codable, Hashable, Identifiable, Sendable {
+    let file: String
+    let patch: String
+    let additions: Int
+    let deletions: Int
+    let status: String?
+
+    var id: String { file }
 }
 
 struct OpenCodeTodo: Codable, Hashable, Identifiable, Sendable {
@@ -496,6 +546,16 @@ enum OpenCodeJSONValue: Codable, Hashable, Sendable {
         if case let .object(value) = self { return value }
         return nil
     }
+
+    var arrayValue: [OpenCodeJSONValue]? {
+        if case let .array(value) = self { return value }
+        return nil
+    }
+
+    var doubleValue: Double? {
+        if case let .number(value) = self { return value }
+        return nil
+    }
 }
 
 struct OpenCodeControlRequest: Decodable, Hashable, Sendable {
@@ -538,6 +598,7 @@ struct OpenCodeToolMetadata: Codable, Hashable, Sendable {
     let description: String?
     let exit: Int?
     let truncated: Bool?
+    let files: [OpenCodeJSONValue]?
 }
 
 struct OpenCodeEventEnvelope: Codable, Sendable {
@@ -596,6 +657,8 @@ enum OpenCodeTypedEvent: Sendable {
     case questionAsked(OpenCodeQuestionRequest)
     case questionReplied(sessionID: String, requestID: String)
     case questionRejected(sessionID: String, requestID: String)
+    case vcsBranchUpdated(branch: String?)
+    case fileWatcherUpdated(file: String)
     case unknown(String)
 
     init?(envelope: OpenCodeEventEnvelope) {
@@ -671,6 +734,11 @@ enum OpenCodeTypedEvent: Sendable {
             guard let sessionID = envelope.properties.sessionID,
                   let requestID = envelope.properties.id else { return nil }
             self = .questionRejected(sessionID: sessionID, requestID: requestID)
+        case "vcs.branch.updated":
+            self = .vcsBranchUpdated(branch: envelope.properties.branch)
+        case "file.watcher.updated":
+            guard let file = envelope.properties.file else { return nil }
+            self = .fileWatcherUpdated(file: file)
         default:
             self = .unknown(envelope.type)
         }
@@ -698,6 +766,8 @@ struct OpenCodeEventProperties: Codable, Sendable {
     let reply: String?
     let message: String?
     let error: OpenCodeSessionErrorPayload?
+    let branch: String?
+    let file: String?
 
     enum CodingKeys: String, CodingKey {
         case sessionID
@@ -720,6 +790,8 @@ struct OpenCodeEventProperties: Codable, Sendable {
         case reply
         case message
         case error
+        case branch
+        case file
     }
 }
 
@@ -900,7 +972,7 @@ enum OpenCodePreviewData {
                         url: nil
                     ),
                     output: "Build Succeeded",
-                    metadata: OpenCodeToolMetadata(output: "Build Succeeded", description: "Simulator build", exit: 0, truncated: false)
+                    metadata: OpenCodeToolMetadata(output: "Build Succeeded", description: "Simulator build", exit: 0, truncated: false, files: nil)
                 ),
                 text: nil
             ),

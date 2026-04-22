@@ -65,7 +65,7 @@ enum OpenCodeStateReducer {
                   info.sessionID == selectedSessionID else {
                 return .ignored("session mismatch")
             }
-            let payload = OpenCodeEventEnvelope(type: "message.updated", properties: .init(sessionID: info.sessionID, info: OpenCodeEventInfo(message: info), part: nil, status: nil, todos: nil, messageID: nil, partID: nil, field: nil, delta: nil, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil))
+            let payload = OpenCodeEventEnvelope(type: "message.updated", properties: .init(sessionID: info.sessionID, info: OpenCodeEventInfo(message: info), part: nil, status: nil, todos: nil, messageID: nil, partID: nil, field: nil, delta: nil, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil, branch: nil, file: nil))
             let update = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: selectedSessionID, messages: state.messages)
             state.messages = update.messages
             return .message(update.reason)
@@ -74,7 +74,7 @@ enum OpenCodeStateReducer {
                   part.sessionID == selectedSessionID else {
                 return .ignored("session mismatch")
             }
-            let payload = OpenCodeEventEnvelope(type: "message.part.updated", properties: .init(sessionID: part.sessionID, info: nil, part: part, status: nil, todos: nil, messageID: nil, partID: nil, field: nil, delta: nil, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil))
+            let payload = OpenCodeEventEnvelope(type: "message.part.updated", properties: .init(sessionID: part.sessionID, info: nil, part: part, status: nil, todos: nil, messageID: nil, partID: nil, field: nil, delta: nil, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil, branch: nil, file: nil))
             let update = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: selectedSessionID, messages: state.messages)
             state.messages = update.messages
             return .message(update.reason)
@@ -83,7 +83,7 @@ enum OpenCodeStateReducer {
                   sessionID == selectedSessionID else {
                 return .ignored("session mismatch")
             }
-            let payload = OpenCodeEventEnvelope(type: "message.part.delta", properties: .init(sessionID: sessionID, info: nil, part: nil, status: nil, todos: nil, messageID: messageID, partID: partID, field: field, delta: delta, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil))
+            let payload = OpenCodeEventEnvelope(type: "message.part.delta", properties: .init(sessionID: sessionID, info: nil, part: nil, status: nil, todos: nil, messageID: messageID, partID: partID, field: field, delta: delta, id: nil, permissionType: nil, pattern: nil, callID: nil, title: nil, metadata: nil, permissionID: nil, response: nil, reply: nil, message: nil, error: nil, branch: nil, file: nil))
             let update = OpenCodeStreamReducer.apply(payload: payload, selectedSessionID: selectedSessionID, messages: state.messages)
             state.messages = update.messages
             return .message(update.reason)

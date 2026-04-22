@@ -33,6 +33,10 @@ extension AppViewModel {
         }
 
         try await reloadSessionStatuses()
+
+        if hasGitProject {
+            await reloadGitViewData(force: true)
+        }
     }
 
     func reloadSessionStatuses() async throws {
@@ -70,8 +74,10 @@ extension AppViewModel {
 
     func selectSession(_ session: OpenCodeSession) async {
         withAnimation(opencodeSelectionAnimation) {
+            selectedProjectContentTab = .sessions
             directoryState.selectedSession = session
             directoryState.todos = []
+            directoryState.selectedVCSFile = nil
         }
         streamDirectory = session.directory
         do {

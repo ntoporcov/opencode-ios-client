@@ -14,13 +14,15 @@ struct RootView: View {
                         }
                     }
                 } content: {
-                    SessionListView(viewModel: viewModel) {
+                    ProjectContentView(viewModel: viewModel) {
                         withAnimation(opencodeSelectionAnimation) {
                             preferredCompactColumn = .detail
                         }
                     }
                 } detail: {
-                    if let session = viewModel.selectedSession {
+                    if viewModel.selectedProjectContentTab == .git, viewModel.hasGitProject {
+                        GitDiffView(viewModel: viewModel)
+                    } else if let session = viewModel.selectedSession {
                         ChatView(viewModel: viewModel, sessionID: session.id)
                             .id(session.id)
                     } else {
@@ -39,7 +41,7 @@ struct RootView: View {
                 NavigationStack {
                     ConnectionView(viewModel: viewModel)
                         .navigationTitle("OpenCode")
-                        .navigationBarTitleDisplayMode(.large)
+                        .opencodeLargeNavigationTitle()
                 }
             }
         }

@@ -34,9 +34,9 @@ struct ConfigurationsSheet: View {
                 }
             }
             .navigationTitle("Configurations")
-            .navigationBarTitleDisplayMode(.inline)
+            .opencodeInlineNavigationTitle()
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(placement: .opencodeTrailing) {
                     Button("Done") {
                         viewModel.isShowingConfigurationsSheet = false
                     }
@@ -83,7 +83,7 @@ private struct AgentDefaultSelectionView: View {
             }
         }
         .navigationTitle("Agent")
-        .navigationBarTitleDisplayMode(.inline)
+        .opencodeInlineNavigationTitle()
     }
 }
 
@@ -116,7 +116,7 @@ private struct ModelDefaultSelectionView: View {
             }
         }
         .navigationTitle("Model")
-        .navigationBarTitleDisplayMode(.inline)
+        .opencodeInlineNavigationTitle()
     }
 }
 
@@ -149,7 +149,7 @@ private struct ReasoningDefaultSelectionView: View {
             }
         }
         .navigationTitle("Reasoning")
-        .navigationBarTitleDisplayMode(.inline)
+        .opencodeInlineNavigationTitle()
     }
 }
 

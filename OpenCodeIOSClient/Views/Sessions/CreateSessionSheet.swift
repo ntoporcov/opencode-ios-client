@@ -25,9 +25,9 @@ struct CreateSessionSheet: View {
                 }
             }
             .navigationTitle("New Session")
-            .navigationBarTitleDisplayMode(.inline)
+            .opencodeInlineNavigationTitle()
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItem(placement: .opencodeLeading) {
                     Button("Cancel") {
                         viewModel.isShowingCreateSessionSheet = false
                     }

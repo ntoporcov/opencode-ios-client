@@ -160,11 +160,18 @@ extension AppViewModel {
     func selectDirectory(_ directory: String?) async {
         withAnimation(opencodeSelectionAnimation) {
             selectedDirectory = directory
+            selectedProjectContentTab = .sessions
             directoryState.selectedSession = nil
             directoryState.messages = []
             directoryState.todos = []
             directoryState.permissions = []
             directoryState.questions = []
+            directoryState.vcsInfo = nil
+            directoryState.vcsFileStatuses = []
+            directoryState.vcsDiffsByMode = [:]
+            directoryState.selectedVCSMode = .git
+            directoryState.selectedVCSFile = nil
+            directoryState.vcsErrorMessage = nil
         }
         do {
             if let directory, !directory.isEmpty {

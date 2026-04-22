@@ -200,6 +200,17 @@ extension AppViewModel {
             appendDebugLog("drop \(payload.type): \(reason)")
         }
 
+        switch managed.typed {
+        case let .vcsBranchUpdated(branch):
+            directoryState.vcsInfo = OpenCodeVCSInfo(branch: branch, defaultBranch: directoryState.vcsInfo?.defaultBranch)
+            refreshVCSFromEvent()
+        case let .fileWatcherUpdated(file):
+            guard !file.hasPrefix(".git/") else { break }
+            refreshVCSFromEvent()
+        default:
+            break
+        }
+
         if let selectedSession,
            payload.type == "session.diff",
            payload.properties.sessionID == selectedSession.id {
@@ -269,6 +280,8 @@ extension AppViewModel {
             return question.sessionID == selectedSessionID
         case let .messagePartRemoved(messageID, _):
             return messages.contains { $0.info.id == messageID }
+        case .vcsBranchUpdated, .fileWatcherUpdated:
+            return hasGitProject
         default:
             return false
         }

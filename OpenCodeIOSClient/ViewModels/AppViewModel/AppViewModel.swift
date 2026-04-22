@@ -5,6 +5,20 @@ let opencodeSelectionAnimation = Animation.snappy(duration: 0.28, extraBounce: 0
 
 @MainActor
 final class AppViewModel: ObservableObject {
+    enum ProjectContentTab: String, CaseIterable {
+        case sessions
+        case git
+
+        var title: String {
+            switch self {
+            case .sessions:
+                return "Sessions"
+            case .git:
+                return "Git"
+            }
+        }
+    }
+
     enum StorageKey {
         static let lastServerConfig = "lastServerConfig"
         static let newSessionDefaults = "newSessionDefaults"
@@ -16,6 +30,7 @@ final class AppViewModel: ObservableObject {
     @Published var projects: [OpenCodeProject] = []
     @Published var currentProject: OpenCodeProject?
     @Published var selectedDirectory: String?
+    @Published var selectedProjectContentTab: ProjectContentTab = .sessions
     @Published var isShowingProjectPicker = false
     @Published var projectSearchQuery = ""
     @Published var projectSearchResults: [String] = []
@@ -93,4 +108,20 @@ final class AppViewModel: ObservableObject {
     var todos: [OpenCodeTodo] { directoryState.todos }
     var permissions: [OpenCodePermission] { directoryState.permissions }
     var questions: [OpenCodeQuestionRequest] { directoryState.questions }
+    var vcsInfo: OpenCodeVCSInfo? { directoryState.vcsInfo }
+    var vcsFileStatuses: [OpenCodeVCSFileStatus] { directoryState.vcsFileStatuses }
+    var selectedVCSDiffMode: OpenCodeVCSDiffMode {
+        get { directoryState.selectedVCSMode }
+        set { directoryState.selectedVCSMode = newValue }
+    }
+    var selectedVCSFile: String? {
+        get { directoryState.selectedVCSFile }
+        set { directoryState.selectedVCSFile = newValue }
+    }
+    var hasGitProject: Bool { currentProject?.vcs == "git" && effectiveSelectedDirectory != nil }
+    var currentVCSDiffs: [OpenCodeVCSFileDiff] { directoryState.vcsDiffsByMode[selectedVCSDiffMode] ?? [] }
+    var selectedVCSFileDiff: OpenCodeVCSFileDiff? {
+        guard let selectedVCSFile else { return nil }
+        return currentVCSDiffs.first { $0.file == selectedVCSFile }
+    }
 }

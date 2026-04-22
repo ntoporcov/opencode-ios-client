@@ -40,7 +40,7 @@ private struct QuestionPanelPreviewHost: View {
             onSubmit: { _, _ in }
         )
         .padding()
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(OpenCodePlatformColor.groupedBackground)
     }
 }
 
@@ -50,7 +50,7 @@ private struct MessageComposerPreviewHost: View {
     var body: some View {
         MessageComposer(text: $text, isBusy: false, onSend: {}, onStop: {})
             .padding()
-            .background(Color(uiColor: .systemGroupedBackground))
+            .background(OpenCodePlatformColor.groupedBackground)
     }
 }
 
@@ -71,19 +71,19 @@ private struct MessageComposerPreviewHost: View {
 #Preview("Thinking Row") {
     ThinkingRow()
         .padding()
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Todo Card") {
     TodoCard(todo: OpenCodePreviewData.todoActive)
         .padding()
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Todo Strip") {
     TodoStrip(todos: OpenCodePreviewData.todos, onTapCard: {})
         .padding()
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Todo Inspector") {
@@ -95,13 +95,13 @@ private struct MessageComposerPreviewHost: View {
 #Preview("Permission Card") {
     PermissionCard(permission: OpenCodePreviewData.permission, onDismiss: { _ in }, onRespond: { _, _ in })
         .padding()
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Permission Stack") {
     PermissionActionStack(permissions: [OpenCodePreviewData.permission], onDismiss: { _ in }, onRespond: { _, _ in })
         .padding()
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Question Panel") {
@@ -125,13 +125,13 @@ private struct MessageComposerPreviewHost: View {
         onToggle: {}
     )
     .padding()
-    .background(Color(uiColor: .systemGroupedBackground))
+    .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Activity Row") {
     ActivityRow(style: ActivityStyle(title: "Build for simulator", subtitle: "Completed", icon: "terminal.fill", tint: .green, isRunning: false))
         .padding()
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Detail Text") {
@@ -151,13 +151,13 @@ private struct MessageComposerPreviewHost: View {
 #Preview("User Message Bubble") {
     MessageBubble(message: OpenCodePreviewData.userMessage, detailedMessage: nil, isStreamingMessage: false, onSelectPart: { _ in })
         .padding()
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Assistant Message Bubble") {
     MessageBubble(message: OpenCodePreviewData.assistantMessage, detailedMessage: OpenCodePreviewData.assistantMessage, isStreamingMessage: true, onSelectPart: { _ in })
         .padding()
-        .background(Color(uiColor: .systemGroupedBackground))
+        .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Message Composer") {

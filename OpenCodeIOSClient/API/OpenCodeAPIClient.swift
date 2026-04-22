@@ -68,6 +68,24 @@ struct OpenCodeAPIClient {
         ])
     }
 
+    func getVCSInfo(directory: String? = nil) async throws -> OpenCodeVCSInfo {
+        let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
+        return try await send(path: "/vcs", method: "GET", queryItems: queryItems)
+    }
+
+    func listFileStatus(directory: String? = nil) async throws -> [OpenCodeVCSFileStatus] {
+        let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
+        return try await send(path: "/file/status", method: "GET", queryItems: queryItems)
+    }
+
+    func getVCSDiff(mode: OpenCodeVCSDiffMode, directory: String? = nil) async throws -> [OpenCodeVCSFileDiff] {
+        var queryItems = [URLQueryItem(name: "mode", value: mode.rawValue)]
+        if let directory {
+            queryItems.append(URLQueryItem(name: "directory", value: directory))
+        }
+        return try await send(path: "/vcs/diff", method: "GET", queryItems: queryItems)
+    }
+
     func listMessages(sessionID: String, limit: Int? = nil) async throws -> [OpenCodeMessageEnvelope] {
         var path = "/session/\(sessionID)/message"
         if let limit {
