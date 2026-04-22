@@ -749,7 +749,7 @@ enum OpenCodePreviewData {
 
     static let repoProject = OpenCodeProject(
         id: "preview-project",
-        worktree: "/Users/mininic/XCodeProjects/opencode-ios-client",
+        worktree: "/path/to/opencode-ios-client",
         vcs: "git",
         name: "opencode-ios-client",
         icon: OpenCodeProject.Icon(color: "#4F46E5"),

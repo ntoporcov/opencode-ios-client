@@ -98,9 +98,9 @@ final class OpenCodeAPIClientTests: XCTestCase {
 
     func testEventURLsBuildScopedAndGlobalEndpoints() throws {
         let client = OpenCodeAPIClient(config: OpenCodeServerConfig(baseURL: "http://127.0.0.1:4096", username: "opencode", password: "pw"))
-        let urls = try client.eventURLs(directory: "/Users/mininic")
+        let urls = try client.eventURLs(directory: "/tmp/project")
         XCTAssertEqual(urls.map(\.absoluteString), [
-            "http://127.0.0.1:4096/event?directory=/Users/mininic",
+            "http://127.0.0.1:4096/event?directory=/tmp/project",
             "http://127.0.0.1:4096/global/event",
         ])
     }

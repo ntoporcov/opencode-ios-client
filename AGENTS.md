@@ -364,26 +364,26 @@ xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj -scheme OpenCodeIOSClient
 Build for device:
 
 ```bash
-xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj -scheme OpenCodeIOSClient -destination 'id=00008150-001A43A80207801C' build
+xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj -scheme OpenCodeIOSClient -destination 'id=<device-udid>' build
 ```
 
 Install on device:
 
 ```bash
-xcrun devicectl device install app --device "00008150-001A43A80207801C" \
-  "/Users/mininic/Library/Developer/Xcode/DerivedData/OpenCodeIOSClient-fslbxknxbnqdqydrtpagkazgjnfk/Build/Products/Debug-iphoneos/OpenCodeIOSClient.app"
+xcrun devicectl device install app --device "<device-udid>" \
+  "<derived-data>/Build/Products/Debug-iphoneos/OpenCodeIOSClient.app"
 ```
 
 Launch on device:
 
 ```bash
-xcrun devicectl device process launch --device "00008150-001A43A80207801C" com.ntoporcov.opencode-client
+xcrun devicectl device process launch --device "<device-udid>" com.ntoporcov.opencode-client
 ```
 
 Regenerate the Xcode project after adding/removing source files:
 
 ```bash
-/Users/mininic/.local/bin/xcodegen generate
+xcodegen generate
 ```
 
 ### Practical Notes

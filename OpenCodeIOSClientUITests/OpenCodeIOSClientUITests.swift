@@ -4,7 +4,7 @@ final class OpenCodeIOSClientUITests: XCTestCase {
     private let baseURL = URL(string: "http://127.0.0.1:4096")!
     private let username = "opencode"
     private let password = ""
-    private let projectDirectory = "/Users/mininic/XCodeProjects/opencode-ios-client"
+    private let projectDirectory = ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_DIRECTORY"] ?? "/tmp/opencode-ios-client"
 
     override func setUpWithError() throws {
         continueAfterFailure = false
