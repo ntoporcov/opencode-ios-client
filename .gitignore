@@ -4,6 +4,8 @@
 DerivedData/
 .derivedData/
 .derived-data-device/
+.derivedData-device/
+.derivedData*/
 build/
 BuildDevice/
 *.xcresult/
