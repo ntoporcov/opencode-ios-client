@@ -2,6 +2,30 @@ import Foundation
 import SwiftUI
 
 extension AppViewModel {
+    func addDraftAttachments(_ attachments: [OpenCodeComposerAttachment]) {
+        guard !attachments.isEmpty else { return }
+
+        let existingIDs = Set(draftAttachments.map(\.id))
+        let newItems = attachments.filter { !existingIDs.contains($0.id) }
+        guard !newItems.isEmpty else { return }
+
+        withAnimation(opencodeSelectionAnimation) {
+            draftAttachments.append(contentsOf: newItems)
+        }
+    }
+
+    func removeDraftAttachment(_ attachment: OpenCodeComposerAttachment) {
+        withAnimation(opencodeSelectionAnimation) {
+            draftAttachments.removeAll { $0.id == attachment.id }
+        }
+    }
+
+    func clearDraftAttachments() {
+        withAnimation(opencodeSelectionAnimation) {
+            draftAttachments.removeAll()
+        }
+    }
+
     var selectableAgents: [OpenCodeAgent] {
         availableAgents
             .filter { ($0.hidden ?? false) == false && $0.mode != "subagent" }

@@ -119,15 +119,54 @@ struct OpenCodeMessageEnvelope: Codable, Identifiable, Hashable, Sendable {
     static func local(
         role: String,
         text: String,
+        attachments: [OpenCodeComposerAttachment] = [],
         messageID: String = OpenCodeIdentifier.message(),
         sessionID: String? = nil,
         partID: String = OpenCodeIdentifier.part(),
         agent: String? = nil,
         model: OpenCodeMessageModelReference? = nil
     ) -> OpenCodeMessageEnvelope {
-        OpenCodeMessageEnvelope(
+        var parts: [OpenCodePart] = []
+
+        if !text.isEmpty || attachments.isEmpty {
+            parts.append(
+                OpenCodePart(
+                    id: partID,
+                    messageID: messageID,
+                    sessionID: sessionID,
+                    type: "text",
+                    mime: nil,
+                    filename: nil,
+                    url: nil,
+                    reason: nil,
+                    tool: nil,
+                    callID: nil,
+                    state: nil,
+                    text: text
+                )
+            )
+        }
+
+        parts.append(contentsOf: attachments.map { attachment in
+            OpenCodePart(
+                id: OpenCodeIdentifier.part(),
+                messageID: messageID,
+                sessionID: sessionID,
+                type: "file",
+                mime: attachment.mime,
+                filename: attachment.filename,
+                url: attachment.dataURL,
+                reason: nil,
+                tool: nil,
+                callID: nil,
+                state: nil,
+                text: nil
+            )
+        })
+
+        return OpenCodeMessageEnvelope(
             info: OpenCodeMessage(id: messageID, role: role, sessionID: sessionID, time: nil, agent: agent, model: model),
-            parts: [OpenCodePart(id: partID, messageID: messageID, sessionID: sessionID, type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: text)]
+            parts: parts
         )
     }
 
@@ -304,6 +343,36 @@ struct OpenCodeProvider: Codable, Identifiable, Hashable, Sendable {
     let models: [String: OpenCodeModel]
 }
 
+struct OpenCodeCommand: Codable, Identifiable, Hashable, Sendable {
+    let name: String
+    let description: String?
+    let agent: String?
+    let model: String?
+    let source: String?
+    let template: String
+    let subtask: Bool?
+    let hints: [String]
+
+    var id: String { name }
+}
+
+struct OpenCodeComposerAttachment: Identifiable, Hashable, Sendable {
+    enum Kind: String, Hashable, Sendable {
+        case image
+        case file
+    }
+
+    let id: String
+    let kind: Kind
+    let filename: String
+    let mime: String
+    let dataURL: String
+
+    var isImage: Bool {
+        kind == .image || mime.lowercased().hasPrefix("image/")
+    }
+}
+
 struct OpenCodeProvidersResponse: Codable, Hashable, Sendable {
     let providers: [OpenCodeProvider]
     let `default`: [String: String]?
@@ -313,6 +382,7 @@ struct OpenCodeDirectoryState: Equatable, Sendable {
     var sessions: [OpenCodeSession] = []
     var selectedSession: OpenCodeSession?
     var messages: [OpenCodeMessageEnvelope] = []
+    var commands: [OpenCodeCommand] = []
     var sessionStatuses: [String: String] = [:]
     var todos: [OpenCodeTodo] = []
     var permissions: [OpenCodePermission] = []
@@ -633,6 +703,9 @@ struct OpenCodePart: Codable, Hashable, Sendable {
     let messageID: String?
     let sessionID: String?
     let type: String
+    let mime: String?
+    let filename: String?
+    let url: String?
     let reason: String?
     let tool: String?
     let callID: String?
@@ -959,6 +1032,46 @@ enum OpenCodePreviewData {
         OpenCodeAgent(name: "planner", description: "Breaks down UI work", mode: "default", hidden: false, model: nil, variant: nil),
     ]
 
+    static let commands = [
+        OpenCodeCommand(
+            name: "compact",
+            description: "Summarize the session so far",
+            agent: nil,
+            model: nil,
+            source: "command",
+            template: "Compact the current session state.",
+            subtask: nil,
+            hints: []
+        ),
+        OpenCodeCommand(
+            name: "review",
+            description: "Review recent code changes for issues",
+            agent: nil,
+            model: nil,
+            source: "command",
+            template: "Review the latest changes.",
+            subtask: nil,
+            hints: []
+        ),
+    ]
+
+    static let composerAttachments = [
+        OpenCodeComposerAttachment(
+            id: "attachment-preview-image",
+            kind: .image,
+            filename: "chat-layout.png",
+            mime: "image/png",
+            dataURL: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO7Z0l8AAAAASUVORK5CYII="
+        ),
+        OpenCodeComposerAttachment(
+            id: "attachment-preview-file",
+            kind: .file,
+            filename: "feedback.txt",
+            mime: "text/plain",
+            dataURL: "data:text/plain;base64,VGhlIGNvbXBvc2VyIHNob3VsZCBmZWVsIG1vcmUgbGlrZSBpTWVzc2FnZS4="
+        ),
+    ]
+
     static let previewModel = OpenCodeModel(
         id: "gpt-5.4",
         providerID: "openai",
@@ -988,6 +1101,9 @@ enum OpenCodePreviewData {
                 messageID: "message-preview-user",
                 sessionID: primarySession.id,
                 type: "text",
+                mime: nil,
+                filename: nil,
+                url: nil,
                 reason: nil,
                 tool: nil,
                 callID: nil,
@@ -1012,6 +1128,9 @@ enum OpenCodePreviewData {
                 messageID: "message-preview-assistant",
                 sessionID: primarySession.id,
                 type: "reasoning",
+                mime: nil,
+                filename: nil,
+                url: nil,
                 reason: "running",
                 tool: nil,
                 callID: nil,
@@ -1023,6 +1142,9 @@ enum OpenCodePreviewData {
                 messageID: "message-preview-assistant",
                 sessionID: primarySession.id,
                 type: "bash",
+                mime: nil,
+                filename: nil,
+                url: nil,
                 reason: "completed",
                 tool: "bash",
                 callID: "call-preview-build",
@@ -1048,6 +1170,9 @@ enum OpenCodePreviewData {
                 messageID: "message-preview-assistant",
                 sessionID: primarySession.id,
                 type: "text",
+                mime: nil,
+                filename: nil,
+                url: nil,
                 reason: nil,
                 tool: nil,
                 callID: nil,
@@ -1072,6 +1197,9 @@ enum OpenCodePreviewData {
                 messageID: "message-preview-todo",
                 sessionID: primarySession.id,
                 type: "tool",
+                mime: nil,
+                filename: nil,
+                url: nil,
                 reason: "completed",
                 tool: "todowrite",
                 callID: "call-preview-todo",
@@ -1149,7 +1277,7 @@ enum OpenCodeStreamReducer {
             guard let index = result.messages.firstIndex(where: { $0.info.id == messageID }) else {
                 if let sessionID = payload.properties.sessionID {
                     let placeholder = OpenCodeMessage(id: messageID, role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil)
-                    let placeholderPart = OpenCodePart(id: partID, messageID: messageID, sessionID: sessionID, type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: delta)
+                    let placeholderPart = OpenCodePart(id: partID, messageID: messageID, sessionID: sessionID, type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: delta)
                     result.messages.append(OpenCodeMessageEnvelope(info: placeholder, parts: [placeholderPart]))
                     result.applied = true
                     result.reason = "delta placeholder created"
@@ -1190,6 +1318,9 @@ struct SendMessagePart: Encodable {
     let id: String?
     let type: String
     let text: String?
+    let mime: String?
+    let filename: String?
+    let url: String?
     let synthetic: Bool?
     let metadata: [String: OpenCodeJSONValue]?
 }

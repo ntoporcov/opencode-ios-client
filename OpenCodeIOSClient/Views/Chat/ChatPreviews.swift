@@ -46,9 +46,10 @@ private struct QuestionPanelPreviewHost: View {
 
 private struct MessageComposerPreviewHost: View {
     @State private var text = "Can you tighten the vertical rhythm in this screen?"
+    @State private var isAccessoryMenuOpen = false
 
     var body: some View {
-        MessageComposer(text: $text, isBusy: false, onSend: {}, onStop: {})
+        MessageComposer(text: $text, isAccessoryMenuOpen: $isAccessoryMenuOpen, commands: OpenCodePreviewData.commands, attachmentCount: OpenCodePreviewData.composerAttachments.count, isBusy: false, onSend: {}, onStop: {}, onSelectCommand: { _ in }, onAddAttachments: { _ in })
             .padding()
             .background(OpenCodePlatformColor.groupedBackground)
     }
@@ -82,6 +83,12 @@ private struct MessageComposerPreviewHost: View {
 
 #Preview("Todo Strip") {
     TodoStrip(todos: OpenCodePreviewData.todos, onTapCard: {})
+        .padding()
+        .background(OpenCodePlatformColor.groupedBackground)
+}
+
+#Preview("Attachment Strip") {
+    AttachmentStrip(attachments: OpenCodePreviewData.composerAttachments, allowsRemoval: true, onTapAttachment: { _ in }, onRemoveAttachment: { _ in })
         .padding()
         .background(OpenCodePlatformColor.groupedBackground)
 }

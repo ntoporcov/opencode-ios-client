@@ -19,6 +19,7 @@ extension AppViewModel {
         isShowingCreateSessionSheet: Bool = false,
         draftTitle: String = "",
         draftMessage: String = "Polish the chat spacing a bit.",
+        draftAttachments: [OpenCodeComposerAttachment] = OpenCodePreviewData.composerAttachments,
         toolMessageDetails: [String: OpenCodeMessageEnvelope] = OpenCodePreviewData.toolMessageDetails
     ) -> AppViewModel {
         let viewModel = AppViewModel()
@@ -41,12 +42,14 @@ extension AppViewModel {
         viewModel.availableAgents = OpenCodePreviewData.agents
         viewModel.availableProviders = OpenCodePreviewData.providers
         viewModel.defaultModelsByProviderID = OpenCodePreviewData.defaultModelsByProviderID
+        viewModel.directoryState.commands = OpenCodePreviewData.commands
         viewModel.errorMessage = errorMessage
         viewModel.showSavedServerPrompt = showSavedServerPrompt
         viewModel.hasSavedServer = hasSavedServer
         viewModel.isShowingCreateSessionSheet = isShowingCreateSessionSheet
         viewModel.draftTitle = draftTitle
         viewModel.draftMessage = draftMessage
+        viewModel.draftAttachments = draftAttachments
         viewModel.selectAgent(named: OpenCodePreviewData.agents.first?.name, for: OpenCodePreviewData.primarySession)
         viewModel.selectModel(OpenCodeModelReference(providerID: "openai", modelID: "gpt-5.4"), for: OpenCodePreviewData.primarySession)
         viewModel.selectVariant("balanced", for: OpenCodePreviewData.primarySession)

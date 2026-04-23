@@ -8,6 +8,7 @@ struct OpenCodeGlobalBootstrap {
 
 struct OpenCodeDirectoryBootstrap {
     let sessions: [OpenCodeSession]
+    let commands: [OpenCodeCommand]
     let permissions: [OpenCodePermission]
     let questions: [OpenCodeQuestionRequest]
 }
@@ -27,11 +28,13 @@ enum OpenCodeBootstrap {
 
     static func bootstrapDirectory(client: OpenCodeAPIClient, directory: String?) async throws -> OpenCodeDirectoryBootstrap {
         async let sessions = client.listSessions(directory: directory, roots: true)
+        async let commands = client.listCommands(directory: directory)
         async let permissions = client.listPermissions()
         async let questions = client.listQuestions()
 
         return OpenCodeDirectoryBootstrap(
             sessions: try await sessions.filter { $0.isRootSession },
+            commands: try await commands,
             permissions: try await permissions,
             questions: try await questions
         )

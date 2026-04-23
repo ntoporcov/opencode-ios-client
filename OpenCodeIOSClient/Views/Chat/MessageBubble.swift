@@ -29,36 +29,66 @@ struct MessageBubble: View {
             ForEach(Array(effectiveMessage.parts.enumerated()), id: \.offset) { entry in
                 let index = entry.offset
                 let part = entry.element
-                if let text = renderableText(for: part) {
-                    if textStyle(for: part) == .reasoning {
-                        ReasoningBlock(
-                            text: text,
-                            isExpanded: isReasoningExpanded(part: part, index: index),
-                            isRunning: isReasoningRunning(part),
-                            onToggle: { toggleReasoning(part: part, index: index) }
-                        )
-                    } else {
-                        MarkdownMessageText(text: text, isUser: isUser, style: textStyle(for: part))
-                    }
-                } else if let activity = activityStyle(for: part, parts: effectiveMessage.parts, index: index) {
-                    Button {
-                        onSelectPart(part)
-                    } label: {
-                        ActivityRow(style: activity)
-                    }
-                    .buttonStyle(.plain)
+                partView(part, index: index)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+    }
+
+    @ViewBuilder
+    private func partView(_ part: OpenCodePart, index: Int) -> some View {
+        if let attachment = attachment(for: part) {
+            AttachmentBubblePart(attachment: attachment, isUser: isUser)
+        } else if let text = renderableText(for: part) {
+            if textStyle(for: part) == .reasoning {
+                let content =
+                    ReasoningBlock(
+                        text: text,
+                        isExpanded: isReasoningExpanded(part: part, index: index),
+                        isRunning: isReasoningRunning(part),
+                        onToggle: { toggleReasoning(part: part, index: index) }
+                    )
+
+                if isUser {
+                    bubbleWrapped(content)
+                } else {
+                    content
+                }
+            } else {
+                let content = MarkdownMessageText(text: text, isUser: isUser, style: textStyle(for: part))
+
+                if isUser {
+                    bubbleWrapped(content)
+                } else {
+                    content
                 }
             }
-        }
-        .padding(.horizontal, isUser ? 14 : 0)
-        .padding(.vertical, isUser ? 10 : 2)
-        .background {
+        } else if let activity = activityStyle(for: part, parts: effectiveMessage.parts, index: index) {
+            let content =
+                Button {
+                    onSelectPart(part)
+                } label: {
+                    ActivityRow(style: activity)
+                }
+                .buttonStyle(.plain)
+
             if isUser {
-                bubbleColor.clipShape(bubbleShape)
+                bubbleWrapped(content)
+            } else {
+                content
             }
         }
-        .frame(maxWidth: isUser ? 320 : .infinity, alignment: isUser ? .trailing : .leading)
-        .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+    }
+
+    private func bubbleWrapped<Content: View>(_ content: Content) -> some View {
+        content
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background {
+                bubbleColor.clipShape(bubbleShape)
+            }
+            .frame(maxWidth: 320, alignment: .trailing)
+            .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
     private func renderableText(for part: OpenCodePart) -> String? {
@@ -73,6 +103,23 @@ struct MessageBubble: View {
             return .reasoning
         }
         return .standard
+    }
+
+    private func attachment(for part: OpenCodePart) -> OpenCodeComposerAttachment? {
+        guard part.type == "file",
+              let filename = part.filename,
+              let mime = part.mime,
+              let url = part.url else {
+            return nil
+        }
+
+        return OpenCodeComposerAttachment(
+            id: part.id ?? "\(effectiveMessage.id)-\(filename)",
+            kind: mime.lowercased().hasPrefix("image/") ? .image : .file,
+            filename: filename,
+            mime: mime,
+            dataURL: url
+        )
     }
 
     private func reasoningPartID(part: OpenCodePart, index: Int) -> String {
@@ -238,5 +285,27 @@ struct MessageBubble: View {
         }
         guard let reason = part.reason?.lowercased() else { return false }
         return reason == "start" || reason == "started" || reason == "running"
+    }
+}
+
+private struct AttachmentBubblePart: View {
+    let attachment: OpenCodeComposerAttachment
+    let isUser: Bool
+
+    var body: some View {
+        HStack {
+            if attachment.isImage {
+                AttachmentThumbnail(attachment: attachment)
+                    .frame(width: 220, height: 220)
+                    .background(OpenCodePlatformColor.secondaryGroupedBackground)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            } else {
+                AttachmentCard(attachment: attachment, allowsRemoval: false, onTap: {}, onRemove: {})
+            }
+            if !isUser {
+                Spacer(minLength: 0)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
     }
 }

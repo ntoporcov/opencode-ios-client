@@ -9,6 +9,7 @@ extension AppViewModel {
         }
         prefetchSessionPreviews(for: directoryState.sessions)
         withAnimation(opencodeSelectionAnimation) {
+            directoryState.commands = bootstrap.commands
             directoryState.permissions = bootstrap.permissions
             directoryState.questions = bootstrap.questions
         }
@@ -93,9 +94,82 @@ extension AppViewModel {
     func sendCurrentMessage() async {
         guard let selectedSessionID = selectedSession?.id else { return }
         let text = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        let attachments = draftAttachments
+        guard !text.isEmpty || !attachments.isEmpty else { return }
 
-        await sendMessage(text, sessionID: selectedSessionID, userVisible: true)
+        if let (command, arguments) = slashCommandInput(from: text) {
+            await sendCommand(command, arguments: arguments, attachments: attachments, sessionID: selectedSessionID, userVisible: true)
+            return
+        }
+
+        await sendMessage(text, attachments: attachments, sessionID: selectedSessionID, userVisible: true)
+    }
+
+    func sendCommand(_ command: OpenCodeCommand, sessionID: String, userVisible: Bool) async {
+        await sendCommand(command, arguments: "", attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible)
+    }
+
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, sessionID: String, userVisible: Bool) async {
+        await sendCommand(command, arguments: arguments, attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible)
+    }
+
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], sessionID: String, userVisible: Bool) async {
+        guard let session = session(matching: sessionID) else { return }
+        await sendCommand(command, arguments: arguments, attachments: attachments, in: session, userVisible: userVisible)
+    }
+
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], in selectedSession: OpenCodeSession, userVisible: Bool) async {
+        guard directoryState.sessionStatuses[selectedSession.id] != "busy" else {
+            appendDebugLog("command blocked busy session=\(debugSessionLabel(selectedSession)) command=\(command.name)")
+            return
+        }
+
+        let requestDirectory = sendDirectory(for: selectedSession)
+        let modelReference = effectiveModelReference(for: selectedSession)
+        let agentName = effectiveAgentName(for: selectedSession)
+        let variant = selectedVariant(for: selectedSession)
+        let trimmedArguments = arguments.trimmingCharacters(in: .whitespacesAndNewlines)
+        let draftCommand = trimmedArguments.isEmpty ? "/\(command.name)" : "/\(command.name) \(trimmedArguments)"
+
+        if userVisible {
+            draftMessage = ""
+            clearDraftAttachments()
+            composerResetToken = UUID()
+        }
+
+        appendDebugLog("command send: \(draftCommand)")
+        appendDebugLog(
+            "command scope session=\(debugSessionLabel(selectedSession)) selectedDir=\(debugDirectoryLabel(effectiveSelectedDirectory)) requestDir=\(debugDirectoryLabel(requestDirectory))"
+        )
+
+        isLoading = true
+        let previousStatus = directoryState.sessionStatuses[selectedSession.id]
+        directoryState.sessionStatuses[selectedSession.id] = "busy"
+        defer { isLoading = false }
+
+        do {
+            try await client.sendCommand(
+                sessionID: selectedSession.id,
+                command: command.name,
+                arguments: trimmedArguments,
+                attachments: attachments,
+                directory: requestDirectory,
+                model: modelReference,
+                agent: agentName,
+                variant: variant
+            )
+            appendDebugLog("command accepted session=\(debugSessionLabel(selectedSession)) command=\(command.name)")
+            startLiveRefresh(for: selectedSession, reason: "command")
+            errorMessage = nil
+        } catch {
+            if userVisible {
+                draftMessage = draftCommand
+                addDraftAttachments(attachments)
+            }
+            directoryState.sessionStatuses[selectedSession.id] = previousStatus
+            appendDebugLog("command error: \(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+        }
     }
 
     func stopCurrentSession() async {
@@ -127,18 +201,14 @@ extension AppViewModel {
         }
     }
 
-    func sendMessage(_ text: String, sessionID: String, userVisible: Bool) async {
+    func sendMessage(_ text: String, attachments: [OpenCodeComposerAttachment] = [], sessionID: String, userVisible: Bool) async {
         guard let session = session(matching: sessionID) else { return }
-        await sendMessage(text, in: session, userVisible: userVisible)
+        await sendMessage(text, attachments: attachments, in: session, userVisible: userVisible)
     }
 
-    func sendMessage(_ text: String, in selectedSession: OpenCodeSession, userVisible: Bool) async {
+    func sendMessage(_ text: String, attachments: [OpenCodeComposerAttachment] = [], in selectedSession: OpenCodeSession, userVisible: Bool) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        guard directoryState.sessionStatuses[selectedSession.id] != "busy" else {
-            appendDebugLog("send blocked busy session=\(debugSessionLabel(selectedSession)) selectedDir=\(debugDirectoryLabel(effectiveSelectedDirectory)) streamDir=\(debugDirectoryLabel(streamDirectory))")
-            return
-        }
+        guard !trimmed.isEmpty || !attachments.isEmpty else { return }
 
         let requestDirectory = sendDirectory(for: selectedSession)
         let messageID = OpenCodeIdentifier.message()
@@ -153,6 +223,7 @@ extension AppViewModel {
         let localUserMessage = OpenCodeMessageEnvelope.local(
             role: "user",
             text: trimmed,
+            attachments: attachments,
             messageID: messageID,
             partID: partID,
             agent: agentName,
@@ -160,6 +231,7 @@ extension AppViewModel {
         )
         if userVisible {
             draftMessage = ""
+            clearDraftAttachments()
             composerResetToken = UUID()
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.messages.append(localUserMessage)
@@ -179,6 +251,7 @@ extension AppViewModel {
             try await client.sendMessageAsync(
                 sessionID: selectedSession.id,
                 text: trimmed,
+                attachments: attachments,
                 directory: requestDirectory,
                 messageID: nil,
                 partID: nil,
@@ -203,11 +276,29 @@ extension AppViewModel {
                     directoryState.messages.removeAll { $0.id == localUserMessage.id }
                 }
                 draftMessage = trimmed
+                addDraftAttachments(attachments)
             }
             directoryState.sessionStatuses[selectedSession.id] = previousStatus
             appendDebugLog("send error: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
+    }
+
+    func slashCommandInput(from text: String) -> (command: OpenCodeCommand, arguments: String)? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.first == "/" else { return nil }
+
+        let body = String(trimmed.dropFirst())
+        guard !body.isEmpty else { return nil }
+
+        let parts = body.split(maxSplits: 1, whereSeparator: { $0.isWhitespace })
+        guard let commandName = parts.first.map(String.init), !commandName.isEmpty,
+              let command = commands.first(where: { $0.name == commandName }) else {
+            return nil
+        }
+
+        let arguments = parts.count > 1 ? String(parts[1]).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        return (command, arguments)
     }
 
     func loadMessages(for session: OpenCodeSession) async throws {

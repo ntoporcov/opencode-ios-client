@@ -114,6 +114,11 @@ struct OpenCodeAPIClient {
         return try await send(path: "/agent", method: "GET", queryItems: queryItems)
     }
 
+    func listCommands(directory: String? = nil) async throws -> [OpenCodeCommand] {
+        let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
+        return try await send(path: "/command", method: "GET", queryItems: queryItems)
+    }
+
     func listProviders(directory: String? = nil) async throws -> [OpenCodeProvider] {
         let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
         let response: OpenCodeProvidersResponse = try await send(path: "/config/providers", method: "GET", queryItems: queryItems)
@@ -166,6 +171,7 @@ struct OpenCodeAPIClient {
     func sendMessage(
         sessionID: String,
         text: String,
+        attachments: [OpenCodeComposerAttachment] = [],
         directory: String? = nil,
         messageID: String? = nil,
         partID: String? = nil,
@@ -173,7 +179,7 @@ struct OpenCodeAPIClient {
         agent: String? = nil,
         variant: String? = nil
     ) async throws -> OpenCodeMessageEnvelope {
-        let payload = makePromptRequest(text: text, messageID: messageID, partID: partID, model: model, agent: agent, variant: variant)
+        let payload = makePromptRequest(text: text, attachments: attachments, messageID: messageID, partID: partID, model: model, agent: agent, variant: variant)
         let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
         return try await send(path: "/session/\(sessionID)/message", method: "POST", queryItems: queryItems, body: payload, directoryHeader: directory)
     }
@@ -181,6 +187,7 @@ struct OpenCodeAPIClient {
     func sendMessageAsync(
         sessionID: String,
         text: String,
+        attachments: [OpenCodeComposerAttachment] = [],
         directory: String? = nil,
         messageID: String? = nil,
         partID: String? = nil,
@@ -188,9 +195,31 @@ struct OpenCodeAPIClient {
         agent: String? = nil,
         variant: String? = nil
     ) async throws {
-        let payload = makePromptRequest(text: text, messageID: messageID, partID: partID, model: model, agent: agent, variant: variant)
+        let payload = makePromptRequest(text: text, attachments: attachments, messageID: messageID, partID: partID, model: model, agent: agent, variant: variant)
         let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
         try await sendNoContent(path: "/session/\(sessionID)/prompt_async", method: "POST", queryItems: queryItems, body: payload, directoryHeader: directory)
+    }
+
+    func sendCommand(
+        sessionID: String,
+        command: String,
+        arguments: String = "",
+        attachments: [OpenCodeComposerAttachment] = [],
+        directory: String? = nil,
+        model: OpenCodeModelReference? = nil,
+        agent: String? = nil,
+        variant: String? = nil
+    ) async throws {
+        let payload = SendCommandRequest(
+            agent: agent,
+            model: model.map { "\($0.providerID)/\($0.modelID)" },
+            arguments: arguments,
+            command: command,
+            variant: variant,
+            parts: attachments.map(makeFilePart)
+        )
+        let queryItems = directory.map { [URLQueryItem(name: "directory", value: $0)] } ?? []
+        try await sendNoContent(path: "/session/\(sessionID)/command", method: "POST", queryItems: queryItems, body: payload, directoryHeader: directory)
     }
 
     func abortSession(sessionID: String, directory: String? = nil, workspaceID: String? = nil) async throws {
@@ -447,29 +476,59 @@ struct OpenCodeAPIClient {
 
     private func makePromptRequest(
         text: String,
+        attachments: [OpenCodeComposerAttachment],
         messageID: String?,
         partID: String?,
         model: OpenCodeModelReference?,
         agent: String?,
         variant: String?
     ) -> SendMessageRequest {
-        let part = SendMessagePart(
-            id: partID,
-            type: "text",
-            text: text,
-            synthetic: nil,
-            metadata: nil
-        )
+        var parts: [SendMessagePart] = []
+        if !text.isEmpty || attachments.isEmpty {
+            parts.append(SendMessagePart(
+                id: partID,
+                type: "text",
+                text: text,
+                mime: nil,
+                filename: nil,
+                url: nil,
+                synthetic: nil,
+                metadata: nil
+            ))
+        }
+        parts.append(contentsOf: attachments.map(makeFilePart))
         return SendMessageRequest(
             messageID: messageID,
             model: model,
             agent: agent,
             variant: variant,
-            parts: [part]
+            parts: parts
+        )
+    }
+
+    private func makeFilePart(_ attachment: OpenCodeComposerAttachment) -> SendMessagePart {
+        SendMessagePart(
+            id: OpenCodeIdentifier.part(),
+            type: "file",
+            text: nil,
+            mime: attachment.mime,
+            filename: attachment.filename,
+            url: attachment.dataURL,
+            synthetic: nil,
+            metadata: nil
         )
     }
 }
 
 private struct UpdateProjectRequest: Encodable {
     let name: String?
+}
+
+private struct SendCommandRequest: Encodable {
+    let agent: String?
+    let model: String?
+    let arguments: String
+    let command: String
+    let variant: String?
+    let parts: [SendMessagePart]
 }

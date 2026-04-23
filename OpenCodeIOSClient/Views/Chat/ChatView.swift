@@ -14,6 +14,9 @@ struct ChatView: View {
     @State private var questionAnswers: [String: Set<String>] = [:]
     @State private var questionCustomAnswers: [String: String] = [:]
     @State private var autoScrollTask: Task<Void, Never>?
+    @State private var composerAccessoryExpansion: ComposerAccessoryExpansion = .collapsed
+    @State private var selectedAttachmentPreview: OpenCodeComposerAttachment?
+    @State private var isComposerMenuOpen = false
 
     private let messageWindowSize = 10
     private var todoIDs: String {
@@ -147,14 +150,65 @@ struct ChatView: View {
                 TodoInspectorView(viewModel: viewModel)
             }
         }
+        .sheet(item: $selectedAttachmentPreview) { attachment in
+            NavigationStack {
+                AttachmentPreviewSheet(attachment: attachment)
+            }
+        }
+        .overlay {
+            if composerAccessoryExpansion.isExpanded || isComposerMenuOpen {
+                GeometryReader { geometry in
+                    let protectedWidth: CGFloat = isComposerMenuOpen ? 276 : 0
+                    let protectedHeight: CGFloat = isComposerMenuOpen ? 252 : 0
+
+                    VStack(spacing: 0) {
+                        Color.black.opacity(0.001)
+                            .frame(height: max(0, geometry.size.height - protectedHeight))
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                dismissComposerOverlays()
+                            }
+
+                        HStack(spacing: 0) {
+                            Color.clear
+                                .frame(width: protectedWidth)
+
+                            Color.black.opacity(0.001)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    dismissComposerOverlays()
+                                }
+                        }
+                        .frame(height: protectedHeight)
+                    }
+                    .ignoresSafeArea()
+                }
+            }
+        }
+        .onChange(of: accessoryPresenceSignature) { _, _ in
+            if viewModel.draftAttachments.isEmpty || viewModel.todos.allSatisfy(\.isComplete) {
+                composerAccessoryExpansion = .collapsed
+            }
+        }
     }
 
     private var composerStack: some View {
         VStack(spacing: 6) {
-            if viewModel.todos.contains(where: { !$0.isComplete }) {
-                TodoStrip(todos: viewModel.todos) {
-                    showingTodoInspector = true
-                }
+            if viewModel.todos.contains(where: { !$0.isComplete }) || !viewModel.draftAttachments.isEmpty {
+                ComposerAccessoryArea(
+                    todos: viewModel.todos,
+                    attachments: viewModel.draftAttachments,
+                    expansion: $composerAccessoryExpansion,
+                    onTapTodo: {
+                        showingTodoInspector = true
+                    },
+                    onTapAttachment: { attachment in
+                        selectedAttachmentPreview = attachment
+                    },
+                    onRemoveAttachment: { attachment in
+                        viewModel.removeDraftAttachment(attachment)
+                    }
+                )
                 .padding(.horizontal, 16)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -191,12 +245,21 @@ struct ChatView: View {
                 let isBusy = viewModel.sessionStatuses[liveSession.id] == "busy"
                 MessageComposer(
                     text: $viewModel.draftMessage,
+                    isAccessoryMenuOpen: $isComposerMenuOpen,
+                    commands: viewModel.commands,
+                    attachmentCount: viewModel.draftAttachments.count,
                     isBusy: isBusy,
                     onSend: {
-                        Task { await viewModel.sendMessage(viewModel.draftMessage, sessionID: sessionID, userVisible: true) }
+                        Task { await viewModel.sendCurrentMessage() }
                     },
                     onStop: {
                         Task { await viewModel.stopCurrentSession() }
+                    },
+                    onSelectCommand: { command in
+                        Task { await viewModel.sendCommand(command, sessionID: sessionID, userVisible: true) }
+                    },
+                    onAddAttachments: { attachments in
+                        viewModel.addDraftAttachments(attachments)
                     }
                 )
                 .id(viewModel.composerResetToken)
@@ -262,6 +325,20 @@ struct ChatView: View {
         }
 
         return "composer"
+    }
+
+    private var accessoryPresenceSignature: String {
+        [
+            viewModel.draftAttachments.map(\.id).joined(separator: "|"),
+            viewModel.todos.filter { !$0.isComplete }.map(\.id).joined(separator: "|")
+        ].joined(separator: "#")
+    }
+
+    private func dismissComposerOverlays() {
+        withAnimation(opencodeSelectionAnimation) {
+            composerAccessoryExpansion = .collapsed
+            isComposerMenuOpen = false
+        }
     }
 
     private func bottomMessageID(from signature: String) -> String {

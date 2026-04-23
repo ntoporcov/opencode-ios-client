@@ -43,6 +43,7 @@ final class AppViewModel: ObservableObject {
     @Published var sessionPreviews: [String: SessionPreview] = [:]
     @Published var draftTitle = ""
     @Published var draftMessage = ""
+    @Published var draftAttachments: [OpenCodeComposerAttachment] = []
     @Published var composerResetToken = UUID()
     @Published var errorMessage: String?
     @Published var isLoading = false
@@ -104,6 +105,7 @@ final class AppViewModel: ObservableObject {
     }
 
     var messages: [OpenCodeMessageEnvelope] { directoryState.messages }
+    var commands: [OpenCodeCommand] { directoryState.commands }
     var sessionStatuses: [String: String] { directoryState.sessionStatuses }
     var todos: [OpenCodeTodo] { directoryState.todos }
     var permissions: [OpenCodePermission] { directoryState.permissions }
