@@ -29,12 +29,16 @@ struct MarkdownMessageText: View {
                 .font(textFont)
                 .foregroundStyle(textForegroundStyle)
                 .lineSpacing(textLineSpacing)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         } else {
             Text(text)
                 .font(textFont)
                 .foregroundStyle(textForegroundStyle)
                 .lineSpacing(textLineSpacing)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .textSelection(.enabled)
         }
     }

@@ -26,6 +26,7 @@ final class AppViewModel: ObservableObject {
         static let recentServerConfigs = "recentServerConfigs"
         static let newSessionDefaults = "newSessionDefaults"
         static let appleIntelligenceWorkspaces = "appleIntelligenceWorkspaces"
+        static let sessionPreviews = "sessionPreviews"
     }
 
     @Published var config = OpenCodeServerConfig()
@@ -65,6 +66,7 @@ final class AppViewModel: ObservableObject {
     @Published var recentServerConfigs: [OpenCodeServerConfig] = []
     @Published var hasSavedServer = false
     @Published var showSavedServerPrompt = false
+    @Published var isShowingAddServerSheet = false
     @Published var isShowingCreateSessionSheet = false
     @Published var isShowingConfigurationsSheet = false
     @Published var debugLastEventSummary = ""
@@ -109,6 +111,7 @@ final class AppViewModel: ObservableObject {
         let recentConfigs = loadRecentServerConfigs()
         appleIntelligenceUserInstructions = defaultAppleIntelligenceUserInstructions
         appleIntelligenceSystemInstructions = defaultAppleIntelligenceSystemInstructions
+        sessionPreviews = loadSessionPreviews()
         if let savedConfig = recentConfigs.first {
             recentServerConfigs = recentConfigs
             config = savedConfig
@@ -138,7 +141,7 @@ final class AppViewModel: ObservableObject {
         return appleIntelligenceRecentWorkspaces.first { $0.id == activeAppleIntelligenceWorkspaceID }
     }
 
-    var sessions: [OpenCodeSession] { directoryState.sessions }
+    var sessions: [OpenCodeSession] { directoryState.sessions.filter(\.isRootSession) }
 
     var selectedSession: OpenCodeSession? {
         get { directoryState.selectedSession }

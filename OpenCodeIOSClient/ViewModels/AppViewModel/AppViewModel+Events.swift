@@ -116,7 +116,7 @@ extension AppViewModel {
             return
         }
 
-        guard shouldApplyDirectoryEvent(from: managed.directory) else {
+        guard shouldApplyDirectoryEvent(from: managed) else {
             appendDebugLog("drop \(managed.envelope.type): scope mismatch \(managed.directory) selected=\(debugDirectoryLabel(effectiveSelectedDirectory)) stream=\(debugDirectoryLabel(streamDirectory)) session=\(debugSessionLabel(selectedSession))")
             return
         }
@@ -149,6 +149,9 @@ extension AppViewModel {
         switch result {
         case let .message(reason):
             reconcileOptimisticUserMessages()
+            if let selectedSession {
+                refreshSessionPreview(for: selectedSession.id, messages: directoryState.messages)
+            }
             if let selectedSession,
                payload.type == "message.updated",
                payload.properties.info?.role == "user",
@@ -183,14 +186,6 @@ extension AppViewModel {
             appendDebugLog("todo changed")
         case .permissionChanged:
             appendDebugLog("permission changed")
-            Task { [weak self] in
-                guard let self else { return }
-                if let session = self.selectedSession {
-                    await self.loadAllPermissions(for: session)
-                } else {
-                    await self.loadAllPermissions(directory: self.effectiveSelectedDirectory)
-                }
-            }
         case .questionChanged:
             appendDebugLog("question changed")
         case .statusChanged:
@@ -206,6 +201,8 @@ extension AppViewModel {
         }
 
         switch managed.typed {
+        case let .sessionDeleted(session):
+            removeSessionPreview(for: session.id)
         case let .vcsBranchUpdated(branch):
             directoryState.vcsInfo = OpenCodeVCSInfo(branch: branch, defaultBranch: directoryState.vcsInfo?.defaultBranch)
             refreshVCSFromEvent()
@@ -236,7 +233,8 @@ extension AppViewModel {
         }
     }
 
-    private func shouldApplyDirectoryEvent(from eventDirectory: String) -> Bool {
+    private func shouldApplyDirectoryEvent(from managed: OpenCodeManagedEvent) -> Bool {
+        let eventDirectory = managed.directory
         let acceptedDirectories = [selectedSession?.directory, effectiveSelectedDirectory]
             .compactMap { directory -> String? in
                 guard let directory, !directory.isEmpty else { return nil }
@@ -247,7 +245,34 @@ extension AppViewModel {
             return eventDirectory == "global"
         }
 
-        return acceptedDirectories.contains(eventDirectory)
+        if acceptedDirectories.contains(eventDirectory) {
+            return true
+        }
+
+        guard eventDirectory == "global" else { return false }
+
+        return managedEventSessionID(for: managed) != nil
+    }
+
+    private func managedEventSessionID(for managed: OpenCodeManagedEvent) -> String? {
+        switch managed.typed {
+        case let .sessionCreated(session), let .sessionUpdated(session), let .sessionDeleted(session):
+            return session.id
+        case let .sessionStatus(sessionID, _), let .sessionIdle(sessionID), let .sessionDiff(sessionID), let .todoUpdated(sessionID, _), let .messageRemoved(sessionID, _), let .messagePartDelta(sessionID, _, _, _, _), let .permissionReplied(sessionID, _, _), let .questionReplied(sessionID, _), let .questionRejected(sessionID, _):
+            return sessionID
+        case let .sessionError(sessionID, _):
+            return sessionID
+        case let .messageUpdated(info):
+            return info.sessionID
+        case let .messagePartUpdated(part):
+            return part.sessionID
+        case let .permissionAsked(permission):
+            return permission.sessionID
+        case let .questionAsked(question):
+            return question.sessionID
+        default:
+            return nil
+        }
     }
 
     private func eventScopeSummary(for managed: OpenCodeManagedEvent) -> String {

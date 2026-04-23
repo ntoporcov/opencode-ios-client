@@ -35,10 +35,11 @@ struct SessionRow: View {
                     }
                 }
 
-                Text(viewModel.sessionPreviews[session.id]?.text ?? session.id)
+                Text(viewModel.sessionPreviews[session.id]?.text ?? "No messages yet")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

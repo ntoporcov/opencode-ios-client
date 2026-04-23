@@ -11,9 +11,13 @@ import UIKit
 struct ConnectionView: View {
     @ObservedObject var viewModel: AppViewModel
 
+    private var hasRecentServers: Bool {
+        viewModel.recentServerConfigs.isEmpty == false
+    }
+
     var body: some View {
         List {
-            if viewModel.showSavedServerPrompt {
+            if hasRecentServers {
                 Section("Recent") {
                     ForEach(viewModel.recentServerConfigs, id: \.recentServerID) { serverConfig in
                         ZStack(alignment: .topTrailing) {
@@ -55,36 +59,8 @@ struct ConnectionView: View {
                 .padding(.vertical,0)
             }
 
-            Section("Server") {
-                TextField("Base URL", text: $viewModel.config.baseURL)
-                    .opencodeDisableTextAutocapitalization()
-                    .autocorrectionDisabled()
-                    .opencodeURLKeyboardType()
-                    .accessibilityIdentifier("connection.baseURL")
-
-                TextField("Username", text: $viewModel.config.username)
-                    .opencodeDisableTextAutocapitalization()
-                    .autocorrectionDisabled()
-                    .accessibilityIdentifier("connection.username")
-
-                SecureField("Password", text: $viewModel.config.password)
-                    .accessibilityIdentifier("connection.password")
-            }
-
-            Section {
-                Button(viewModel.isLoading ? "Connecting..." : "Connect to OpenCode") {
-                    Task { await viewModel.connect() }
-                }
-                .frame(maxWidth: .infinity, alignment: .center)
-                .disabled(viewModel.isLoading)
-                .accessibilityIdentifier("connection.connect")
-            }
-
-            if let errorMessage = viewModel.errorMessage {
-                Section("Error") {
-                    Text(errorMessage)
-                        .foregroundStyle(.red)
-                }
+            if hasRecentServers == false {
+                ServerConnectionSections(viewModel: viewModel)
             }
 
             Section("Apple Intelligence") {
@@ -111,6 +87,36 @@ struct ConnectionView: View {
         }
         .opencodeGroupedListStyle()
         .opencodeLargeNavigationTitle()
+        .toolbar {
+            if hasRecentServers {
+                ToolbarItem(placement: .opencodeTrailing) {
+                    Button {
+                        viewModel.presentAddServerSheet()
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add Server")
+                }
+            }
+        }
+        .sheet(isPresented: $viewModel.isShowingAddServerSheet) {
+            NavigationStack {
+                List {
+                    ServerConnectionSections(viewModel: viewModel)
+                }
+                .opencodeGroupedListStyle()
+                .navigationTitle("Server")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            viewModel.dismissAddServerSheet()
+                        }
+                    }
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $viewModel.isShowingAppleIntelligenceFolderPicker) {
 #if canImport(UIKit) && canImport(UniformTypeIdentifiers)
             AppleIntelligenceFolderPicker { url in
@@ -122,6 +128,44 @@ struct ConnectionView: View {
             Text("Folder picking is unavailable on this platform.")
                 .presentationDetents([.medium])
 #endif
+        }
+    }
+}
+
+private struct ServerConnectionSections: View {
+    @ObservedObject var viewModel: AppViewModel
+
+    var body: some View {
+        Section("Server") {
+            TextField("Base URL", text: $viewModel.config.baseURL)
+                .opencodeDisableTextAutocapitalization()
+                .autocorrectionDisabled()
+                .opencodeURLKeyboardType()
+                .accessibilityIdentifier("connection.baseURL")
+
+            TextField("Username", text: $viewModel.config.username)
+                .opencodeDisableTextAutocapitalization()
+                .autocorrectionDisabled()
+                .accessibilityIdentifier("connection.username")
+
+            SecureField("Password", text: $viewModel.config.password)
+                .accessibilityIdentifier("connection.password")
+        }
+
+        Section {
+            Button(viewModel.isLoading ? "Connecting..." : "Connect to OpenCode") {
+                Task { await viewModel.connect() }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+            .disabled(viewModel.isLoading)
+            .accessibilityIdentifier("connection.connect")
+        }
+
+        if let errorMessage = viewModel.errorMessage {
+            Section("Error") {
+                Text(errorMessage)
+                    .foregroundStyle(.red)
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 import Foundation
 
-struct OpenCodeAPIClient {
+struct OpenCodeAPIClient: Sendable {
     let config: OpenCodeServerConfig
     var session: URLSession = .shared
 
@@ -93,12 +93,16 @@ struct OpenCodeAPIClient {
         return try await send(path: "/vcs/diff", method: "GET", queryItems: queryItems)
     }
 
-    func listMessages(sessionID: String, limit: Int? = nil) async throws -> [OpenCodeMessageEnvelope] {
+    func listMessages(sessionID: String, limit: Int? = nil, directory: String? = nil) async throws -> [OpenCodeMessageEnvelope] {
         var path = "/session/\(sessionID)/message"
+        var queryItems: [URLQueryItem] = []
         if let limit {
             path += "?limit=\(limit)"
         }
-        return try await send(path: path, method: "GET")
+        if let directory, !directory.isEmpty {
+            queryItems.append(URLQueryItem(name: "directory", value: directory))
+        }
+        return try await send(path: path, method: "GET", queryItems: queryItems, directoryHeader: directory)
     }
 
     func getMessage(sessionID: String, messageID: String) async throws -> OpenCodeMessageEnvelope {
@@ -323,6 +327,18 @@ struct OpenCodeAPIClient {
 
     private func send<T: Decodable>(path: String, method: String, queryItems: [URLQueryItem]) async throws -> T {
         let request = try makeRequest(path: path, method: method, queryItems: queryItems)
+        let (data, response) = try await session.data(for: request)
+        return try decode(data: data, response: response)
+    }
+
+    private func send<T: Decodable>(path: String, method: String, queryItems: [URLQueryItem], directoryHeader: String?) async throws -> T {
+        let request = try makeRequest(path: path, method: method, queryItems: queryItems, directoryHeader: directoryHeader)
+        let (data, response) = try await session.data(for: request)
+        return try decode(data: data, response: response)
+    }
+
+    private func send<T: Decodable>(path: String, method: String, directoryHeader: String?) async throws -> T {
+        let request = try makeRequest(path: path, method: method, queryItems: [], directoryHeader: directoryHeader)
         let (data, response) = try await session.data(for: request)
         return try decode(data: data, response: response)
     }

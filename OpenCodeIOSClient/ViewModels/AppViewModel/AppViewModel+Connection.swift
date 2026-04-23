@@ -77,10 +77,21 @@ extension AppViewModel {
         await connect()
     }
 
+    func presentAddServerSheet() {
+        config = OpenCodeServerConfig()
+        errorMessage = nil
+        isShowingAddServerSheet = true
+    }
+
     func prepareToEditRecentServer(_ serverConfig: OpenCodeServerConfig) {
         config = serverConfig
         errorMessage = nil
-        showSavedServerPrompt = false
+        isShowingAddServerSheet = true
+    }
+
+    func dismissAddServerSheet() {
+        isShowingAddServerSheet = false
+        errorMessage = nil
     }
 
     func disconnect() {

@@ -136,7 +136,7 @@ private struct MessageComposerPreviewHost: View {
 }
 
 #Preview("Activity Row") {
-    ActivityRow(style: ActivityStyle(title: "Build for simulator", subtitle: "Completed", icon: "terminal.fill", tint: .green, isRunning: false))
+    ActivityRow(style: ActivityStyle(title: "Shell", subtitle: "Build for simulator", icon: "terminal.fill", tint: .green, isRunning: false, showsDisclosure: true, shimmerTitle: false))
         .padding()
         .background(OpenCodePlatformColor.groupedBackground)
 }
@@ -156,13 +156,13 @@ private struct MessageComposerPreviewHost: View {
 }
 
 #Preview("User Message Bubble") {
-    MessageBubble(message: OpenCodePreviewData.userMessage, detailedMessage: nil, isStreamingMessage: false, onSelectPart: { _ in })
+    MessageBubble(message: OpenCodePreviewData.userMessage, detailedMessage: nil, currentSessionID: OpenCodePreviewData.primarySession.id, isStreamingMessage: false, resolveTaskSessionID: { _, _ in nil }, onSelectPart: { _ in }, onOpenTaskSession: { _ in })
         .padding()
         .background(OpenCodePlatformColor.groupedBackground)
 }
 
 #Preview("Assistant Message Bubble") {
-    MessageBubble(message: OpenCodePreviewData.assistantMessage, detailedMessage: OpenCodePreviewData.assistantMessage, isStreamingMessage: true, onSelectPart: { _ in })
+    MessageBubble(message: OpenCodePreviewData.assistantMessage, detailedMessage: OpenCodePreviewData.assistantMessage, currentSessionID: OpenCodePreviewData.primarySession.id, isStreamingMessage: true, resolveTaskSessionID: { _, _ in OpenCodePreviewData.secondarySession.id }, onSelectPart: { _ in }, onOpenTaskSession: { _ in })
         .padding()
         .background(OpenCodePlatformColor.groupedBackground)
 }

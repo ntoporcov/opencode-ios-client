@@ -382,46 +382,67 @@ extension AppViewModel {
             }
     }
 
-    func prefetchSessionPreviews(for sessions: [OpenCodeSession]) {
-        for session in sessions where sessionPreviews[session.id] == nil {
-            Task { [weak self] in
-                guard let self else { return }
-                do {
-                    let messages = try await self.client.listMessages(sessionID: session.id, limit: 1)
-                    let preview = self.buildSessionPreview(from: messages.first)
-                    await MainActor.run {
-                        self.sessionPreviews[session.id] = preview
-                    }
-                } catch {
-                    return
-                }
-            }
+    func loadSessionPreviews() -> [String: SessionPreview] {
+        guard let data = UserDefaults.standard.data(forKey: StorageKey.sessionPreviews),
+              let decoded = try? JSONDecoder().decode([String: SessionPreview].self, from: data) else {
+            return [:]
         }
+        return decoded
     }
 
-    func buildSessionPreview(from message: OpenCodeMessageEnvelope?) -> SessionPreview {
-        guard let message else {
+    func persistSessionPreviews() {
+        guard let data = try? JSONEncoder().encode(sessionPreviews) else { return }
+        UserDefaults.standard.set(data, forKey: StorageKey.sessionPreviews)
+    }
+
+    func setSessionPreview(_ preview: SessionPreview, for sessionID: String) {
+        sessionPreviews[sessionID] = preview
+        persistSessionPreviews()
+    }
+
+    func removeSessionPreview(for sessionID: String) {
+        sessionPreviews[sessionID] = nil
+        persistSessionPreviews()
+    }
+
+    func refreshSessionPreview(for sessionID: String, messages: [OpenCodeMessageEnvelope]) {
+        setSessionPreview(buildSessionPreview(from: messages), for: sessionID)
+    }
+
+    func buildSessionPreview(from messages: [OpenCodeMessageEnvelope]) -> SessionPreview {
+        guard let message = messages.last(where: { message in
+            message.parts.contains { part in
+                guard let text = part.text?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
+                return !text.isEmpty
+            }
+        }) else {
             return SessionPreview(text: "No messages yet", date: nil)
         }
 
         let text = message.parts
             .compactMap { part -> String? in
-                if let text = part.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
-                    return text.replacingOccurrences(of: "\n", with: " ")
-                }
-                if part.type == "tool", let tool = part.tool {
-                    return tool.replacingOccurrences(of: "-", with: " ").capitalized
-                }
-                return nil
+                part.text?.trimmingCharacters(in: .whitespacesAndNewlines)
             }
-            .joined(separator: " ")
+            .joined(separator: "\n")
+            .lastLinePreview()
 
         let date = dateFromMilliseconds(message.info.time?.completed ?? message.info.time?.created)
-        return SessionPreview(text: text.isEmpty ? "No preview available" : text, date: date)
+        return SessionPreview(text: text ?? "No preview available", date: date)
     }
 
     func dateFromMilliseconds(_ value: Double?) -> Date? {
         guard let value else { return nil }
         return Date(timeIntervalSince1970: value / 1000)
+    }
+}
+
+private extension String {
+    func lastLinePreview(limit: Int = 120) -> String? {
+        let lines = components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard let line = lines.last else { return nil }
+        return String(line.prefix(limit))
     }
 }

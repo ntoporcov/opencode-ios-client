@@ -1,6 +1,6 @@
 import Foundation
 
-struct OpenCodeServerConfig: Equatable, Codable {
+struct OpenCodeServerConfig: Equatable, Codable, Sendable {
     var baseURL: String = "http://127.0.0.1:4096"
     var username: String = "opencode"
     var password: String = ""

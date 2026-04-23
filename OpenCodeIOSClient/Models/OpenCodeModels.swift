@@ -304,7 +304,7 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
     }
 }
 
-struct SessionPreview: Hashable, Sendable {
+struct SessionPreview: Codable, Hashable, Sendable {
     let text: String
     let date: Date?
 }
@@ -609,8 +609,7 @@ struct OpenCodePermission: Decodable, Hashable, Identifiable, Sendable {
     static func from(eventProperties: OpenCodeEventProperties) -> OpenCodePermission? {
         guard let id = eventProperties.id,
               let sessionID = eventProperties.sessionID,
-              let messageID = eventProperties.messageID,
-              let permission = eventProperties.permissionType else {
+              let permission = eventProperties.permission ?? eventProperties.permissionType else {
             return nil
         }
 
@@ -618,16 +617,16 @@ struct OpenCodePermission: Decodable, Hashable, Identifiable, Sendable {
             id: id,
             sessionID: sessionID,
             permission: permission,
-            patterns: {
+            patterns: eventProperties.patterns ?? {
                 switch eventProperties.pattern {
                 case let .string(value): return [value]
                 case let .array(values): return values
                 default: return nil
                 }
             }(),
-            always: nil,
+            always: eventProperties.always,
             metadata: eventProperties.metadata,
-            tool: OpenCodePermissionTool(messageID: messageID, callID: eventProperties.callID)
+            tool: eventProperties.tool ?? OpenCodePermissionTool(messageID: eventProperties.messageID, callID: eventProperties.callID)
         )
     }
 }
@@ -635,6 +634,12 @@ struct OpenCodePermission: Decodable, Hashable, Identifiable, Sendable {
 struct OpenCodePermissionTool: Codable, Hashable, Sendable {
     let messageID: String?
     let callID: String?
+}
+
+struct OpenCodePermissionReplyEvent: Codable, Hashable, Sendable {
+    let sessionID: String
+    let requestID: String
+    let reply: String?
 }
 
 struct OpenCodePermissionReplyRequest: Encodable {
@@ -763,18 +768,47 @@ struct OpenCodeToolState: Codable, Hashable, Sendable {
 struct OpenCodeToolInput: Codable, Hashable, Sendable {
     let command: String?
     let description: String?
+    let filePath: String?
+    let name: String?
     let path: String?
     let query: String?
     let pattern: String?
+    let subagentType: String?
     let url: String?
+
+    enum CodingKeys: String, CodingKey {
+        case command
+        case description
+        case filePath
+        case name
+        case path
+        case query
+        case pattern
+        case subagentType = "subagent_type"
+        case url
+    }
 }
 
 struct OpenCodeToolMetadata: Codable, Hashable, Sendable {
     let output: String?
     let description: String?
     let exit: Int?
+    let filediff: OpenCodeJSONValue?
+    let loaded: [String]?
+    let sessionId: String?
     let truncated: Bool?
     let files: [OpenCodeJSONValue]?
+
+    enum CodingKeys: String, CodingKey {
+        case output
+        case description
+        case exit
+        case filediff
+        case loaded
+        case sessionId
+        case truncated
+        case files
+    }
 }
 
 struct OpenCodeEventEnvelope: Codable, Sendable {
@@ -893,12 +927,22 @@ enum OpenCodeTypedEvent: Sendable {
                   let delta = envelope.properties.delta else { return nil }
             self = .messagePartDelta(sessionID: sessionID, messageID: messageID, partID: partID, field: field, delta: delta)
         case "permission.asked":
-            guard let permission = OpenCodePermission.from(eventProperties: envelope.properties) else { return nil }
-            self = .permissionAsked(permission)
+            if let permission = try? JSONDecoder().decode(OpenCodePermission.self, from: try JSONEncoder().encode(envelope.properties)) {
+                self = .permissionAsked(permission)
+            } else if let permission = OpenCodePermission.from(eventProperties: envelope.properties) {
+                self = .permissionAsked(permission)
+            } else {
+                return nil
+            }
         case "permission.replied":
-            guard let sessionID = envelope.properties.sessionID,
-                  let requestID = envelope.properties.permissionID else { return nil }
-            self = .permissionReplied(sessionID: sessionID, requestID: requestID, reply: envelope.properties.reply)
+            if let reply = try? JSONDecoder().decode(OpenCodePermissionReplyEvent.self, from: try JSONEncoder().encode(envelope.properties)) {
+                self = .permissionReplied(sessionID: reply.sessionID, requestID: reply.requestID, reply: reply.reply)
+            } else if let sessionID = envelope.properties.sessionID,
+                      let requestID = envelope.properties.requestID ?? envelope.properties.permissionID {
+                self = .permissionReplied(sessionID: sessionID, requestID: requestID, reply: envelope.properties.reply)
+            } else {
+                return nil
+            }
         case "question.asked":
             guard let question = try? JSONDecoder().decode(OpenCodeQuestionRequest.self, from: try JSONEncoder().encode(envelope.properties)) else { return nil }
             self = .questionAsked(question)
@@ -932,11 +976,16 @@ struct OpenCodeEventProperties: Codable, Sendable {
     let field: String?
     let delta: String?
     let id: String?
+    let permission: String?
     let permissionType: String?
+    let patterns: [String]?
     let pattern: OpenCodePermissionPattern?
+    let always: [String]?
+    let tool: OpenCodePermissionTool?
     let callID: String?
     let title: String?
     let metadata: [String: OpenCodeJSONValue]?
+    let requestID: String?
     let permissionID: String?
     let response: String?
     let reply: String?
@@ -944,6 +993,64 @@ struct OpenCodeEventProperties: Codable, Sendable {
     let error: OpenCodeSessionErrorPayload?
     let branch: String?
     let file: String?
+
+    init(
+        sessionID: String? = nil,
+        info: OpenCodeEventInfo? = nil,
+        part: OpenCodePart? = nil,
+        status: OpenCodeSessionStatus? = nil,
+        todos: [OpenCodeTodo]? = nil,
+        messageID: String? = nil,
+        partID: String? = nil,
+        field: String? = nil,
+        delta: String? = nil,
+        id: String? = nil,
+        permission: String? = nil,
+        permissionType: String? = nil,
+        patterns: [String]? = nil,
+        pattern: OpenCodePermissionPattern? = nil,
+        always: [String]? = nil,
+        tool: OpenCodePermissionTool? = nil,
+        callID: String? = nil,
+        title: String? = nil,
+        metadata: [String: OpenCodeJSONValue]? = nil,
+        requestID: String? = nil,
+        permissionID: String? = nil,
+        response: String? = nil,
+        reply: String? = nil,
+        message: String? = nil,
+        error: OpenCodeSessionErrorPayload? = nil,
+        branch: String? = nil,
+        file: String? = nil
+    ) {
+        self.sessionID = sessionID
+        self.info = info
+        self.part = part
+        self.status = status
+        self.todos = todos
+        self.messageID = messageID
+        self.partID = partID
+        self.field = field
+        self.delta = delta
+        self.id = id
+        self.permission = permission
+        self.permissionType = permissionType
+        self.patterns = patterns
+        self.pattern = pattern
+        self.always = always
+        self.tool = tool
+        self.callID = callID
+        self.title = title
+        self.metadata = metadata
+        self.requestID = requestID
+        self.permissionID = permissionID
+        self.response = response
+        self.reply = reply
+        self.message = message
+        self.error = error
+        self.branch = branch
+        self.file = file
+    }
 
     enum CodingKeys: String, CodingKey {
         case sessionID
@@ -956,11 +1063,16 @@ struct OpenCodeEventProperties: Codable, Sendable {
         case field
         case delta
         case id
+        case permission
         case permissionType = "type"
+        case patterns
         case pattern
+        case always
+        case tool
         case callID
         case title
         case metadata
+        case requestID
         case permissionID
         case response
         case reply
@@ -1193,13 +1305,16 @@ enum OpenCodePreviewData {
                     input: OpenCodeToolInput(
                         command: "xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj -scheme OpenCodeIOSClient -destination 'platform=iOS Simulator,name=iPhone 17' build",
                         description: "Builds the app for preview validation",
+                        filePath: nil,
+                        name: nil,
                         path: nil,
                         query: nil,
                         pattern: nil,
+                        subagentType: nil,
                         url: nil
                     ),
                     output: "Build Succeeded",
-                    metadata: OpenCodeToolMetadata(output: "Build Succeeded", description: "Simulator build", exit: 0, truncated: false, files: nil)
+                    metadata: OpenCodeToolMetadata(output: "Build Succeeded", description: "Simulator build", exit: 0, filediff: nil, loaded: nil, sessionId: nil, truncated: false, files: nil)
                 ),
                 text: nil
             ),
@@ -1245,7 +1360,7 @@ enum OpenCodePreviewData {
                     status: "completed",
                     title: "Update task list",
                     error: nil,
-                    input: OpenCodeToolInput(command: nil, description: "Track preview work", path: nil, query: nil, pattern: nil, url: nil),
+                    input: OpenCodeToolInput(command: nil, description: "Track preview work", filePath: nil, name: nil, path: nil, query: nil, pattern: nil, subagentType: "explore", url: nil),
                     output: nil,
                     metadata: nil
                 ),

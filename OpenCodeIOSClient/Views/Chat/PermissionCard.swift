@@ -6,52 +6,79 @@ struct PermissionCard: View {
     let onRespond: (OpenCodePermission, String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "hand.raised.fill")
-                    .foregroundStyle(.orange)
-                Text(permission.title)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
+                    .foregroundStyle(.orange)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(permission.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
+
+                    Text(permission.summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
             }
 
-            Text(permission.summary)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
             VStack(spacing: 8) {
-                Button("Allow") {
-                    onRespond(permission, "allow")
+                Button {
+                    onRespond(permission, "always")
+                } label: {
+                    Text("Always")
+                        .frame(maxWidth: .infinity)
                 }
+                .controlSize(.large)
+                .tint(.blue)
                 .opencodePrimaryGlassButton()
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .frame(minHeight: 44)
+
+                Button {
+                    onRespond(permission, "allow")
+                } label: {
+                    Text("Once")
+                        .frame(maxWidth: .infinity)
+                }
+                .controlSize(.large)
+                .buttonStyle(.bordered)
+                .tint(.blue)
+                .frame(maxWidth: .infinity)
+                .frame(minHeight: 44)
 
                 HStack(spacing: 8) {
-                    Button("Deny") {
+                    Button {
                         onRespond(permission, "deny")
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("Reject")
+                            Spacer()
+                        }
+                        .padding(.vertical, 7)
                     }
-                    .opencodeGlassButton(clear: true)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .buttonStyle(.plain)
 
-                    Button("Later") {
+                    Button {
                         onDismiss(permission)
+                    } label: {
+                        HStack {
+                            Spacer()
+                            Text("Later")
+                            Spacer()
+                        }
+                        .padding(.vertical, 7)
                     }
-                    .opencodeGlassButton(clear: true)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .buttonStyle(.plain)
                 }
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 12)
-        .frame(width: 260, alignment: .leading)
-        .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .animation(opencodeSelectionAnimation, value: permission.id)
+        .padding(14)
+        .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 }

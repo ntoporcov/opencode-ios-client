@@ -73,7 +73,6 @@ extension AppViewModel {
         withAnimation(opencodeSelectionAnimation) {
             directoryState.sessions = bootstrap.sessions
         }
-        prefetchSessionPreviews(for: directoryState.sessions)
         withAnimation(opencodeSelectionAnimation) {
             directoryState.commands = bootstrap.commands
             directoryState.permissions = bootstrap.permissions
@@ -394,7 +393,8 @@ extension AppViewModel {
     }
 
     func loadMessages(for session: OpenCodeSession) async throws {
-        let loadedMessages = try await client.listMessages(sessionID: session.id)
+        let loadedMessages = try await client.listMessages(sessionID: session.id, directory: session.directory)
+        refreshSessionPreview(for: session.id, messages: loadedMessages)
         guard selectedSession?.id == session.id else { return }
         appendDebugLog(serverMessageSummary(loadedMessages, sessionID: session.id, reason: "loadMessages"))
         directoryState.messages = mergeMessagesPreservingStreamProgress(existing: directoryState.messages, loaded: loadedMessages)
@@ -471,7 +471,7 @@ extension AppViewModel {
     @MainActor
     func logServerMessageSnapshot(for session: OpenCodeSession, reason: String) async {
         do {
-            let loadedMessages = try await client.listMessages(sessionID: session.id)
+            let loadedMessages = try await client.listMessages(sessionID: session.id, directory: session.directory)
             appendDebugLog(serverMessageSummary(loadedMessages, sessionID: session.id, reason: reason))
         } catch {
             appendDebugLog("server snapshot failed session=\(debugSessionLabel(session)) reason=\(reason) error=\(error.localizedDescription)")
@@ -577,9 +577,17 @@ extension AppViewModel {
         return permissions.filter { $0.sessionID == selectedSession.id }
     }
 
+    func permissions(for sessionID: String) -> [OpenCodePermission] {
+        permissions.filter { $0.sessionID == sessionID }
+    }
+
     var selectedSessionQuestions: [OpenCodeQuestionRequest] {
         guard let selectedSession else { return [] }
         return questions.filter { $0.sessionID == selectedSession.id }
+    }
+
+    func questions(for sessionID: String) -> [OpenCodeQuestionRequest] {
+        questions.filter { $0.sessionID == sessionID }
     }
 
     func hasPermissionRequest(for session: OpenCodeSession) -> Bool {
@@ -658,7 +666,7 @@ extension AppViewModel {
     func deleteSession(_ session: OpenCodeSession) async {
         do {
             try await client.deleteSession(sessionID: session.id)
-            sessionPreviews[session.id] = nil
+            removeSessionPreview(for: session.id)
             if directoryState.selectedSession?.id == session.id {
                 withAnimation(opencodeSelectionAnimation) {
                     directoryState.selectedSession = nil
@@ -694,6 +702,112 @@ extension AppViewModel {
         }
 
         return directoryState.sessions.first(where: { $0.id == sessionID })
+    }
+
+    func parentSession(for session: OpenCodeSession) -> OpenCodeSession? {
+        guard let parentID = session.parentID else { return nil }
+        return self.session(matching: parentID)
+    }
+
+    func childSessions(for sessionID: String) -> [OpenCodeSession] {
+        directoryState.sessions.filter { $0.parentID == sessionID }
+    }
+
+    func ensureAllSessionsLoaded() async {
+        do {
+            let sessions = try await client.listSessions(directory: effectiveSelectedDirectory)
+            withAnimation(opencodeSelectionAnimation) {
+                mergeSessions(sessions)
+            }
+        } catch {
+            return
+        }
+    }
+
+    func openSession(sessionID: String) async {
+        if session(matching: sessionID) == nil {
+            await ensureAllSessionsLoaded()
+        }
+
+        guard let session = session(matching: sessionID) else { return }
+        await selectSession(session)
+    }
+
+    func resolveTaskSessionID(from part: OpenCodePart, currentSessionID: String) -> String? {
+        if let sessionID = part.state?.metadata?.sessionId, !sessionID.isEmpty {
+            return sessionID
+        }
+
+        let description = part.state?.input?.description?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let agentName = taskAgentDisplayName(from: part.state?.input?.subagentType)?.lowercased()
+
+        return childSessions(for: currentSessionID)
+            .filter { child in
+                guard let title = child.title?.lowercased() else { return description == nil && agentName == nil }
+                let descriptionMatches = description.map { title.hasPrefix($0.lowercased()) } ?? true
+                let agentMatches = agentName.map { title.contains("@\($0)") || title.contains($0) } ?? true
+                return descriptionMatches && agentMatches
+            }
+            .sorted {
+                let lhs = $0.title ?? ""
+                let rhs = $1.title ?? ""
+                return lhs < rhs
+            }
+            .first?
+            .id
+    }
+
+    func taskAgentDisplayName(from raw: String?) -> String? {
+        guard let raw, !raw.isEmpty else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = trimmed.first else { return nil }
+        return String(first).uppercased() + trimmed.dropFirst()
+    }
+
+    func latestTaskDescription(for session: OpenCodeSession) -> String? {
+        guard let parentID = session.parentID else { return nil }
+
+        let parentMessages = toolMessageDetails.values
+            .filter { $0.info.sessionID == parentID }
+            .sorted { $0.info.id < $1.info.id }
+
+        for message in parentMessages.reversed() {
+            for part in message.parts.reversed() where part.tool == "task" {
+                if resolveTaskSessionID(from: part, currentSessionID: parentID) == session.id,
+                   let description = part.state?.input?.description?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !description.isEmpty {
+                    return description
+                }
+            }
+        }
+
+        return nil
+    }
+
+    func childSessionTitle(for session: OpenCodeSession) -> String {
+        if let description = latestTaskDescription(for: session), !description.isEmpty {
+            return description
+        }
+
+        if let title = session.title, !title.isEmpty {
+            return title.replacingOccurrences(of: #"\s+\(@[^)]+ subagent\)"#, with: "", options: .regularExpression)
+        }
+
+        return "New Session"
+    }
+
+    func parentSessionTitle(for session: OpenCodeSession) -> String {
+        parentSession(for: session)?.title ?? "Session"
+    }
+
+    private func mergeSessions(_ sessions: [OpenCodeSession]) {
+        for session in sessions {
+            if let index = directoryState.sessions.firstIndex(where: { $0.id == session.id }) {
+                directoryState.sessions[index] = directoryState.sessions[index].merged(with: session)
+            } else {
+                directoryState.sessions.append(session)
+            }
+        }
     }
 
     func sendDirectory(for session: OpenCodeSession) -> String? {

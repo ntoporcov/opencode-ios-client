@@ -38,3 +38,20 @@ import SwiftUI
         .navigationTitle("OpenCode")
     }
 }
+
+#Preview("Add Server Sheet") {
+    NavigationStack {
+        ConnectionView(
+            viewModel: AppViewModel.preview(
+                isConnected: false,
+                hasSavedServer: true,
+                recentServerConfigs: [
+                    OpenCodeServerConfig(baseURL: "http://10.0.1.12:4096", username: "nick", password: "secret"),
+                    OpenCodeServerConfig(baseURL: "https://lab.example.com", username: "dev", password: "secret")
+                ],
+                isShowingAddServerSheet: true
+            )
+        )
+        .navigationTitle("OpenCode")
+    }
+}

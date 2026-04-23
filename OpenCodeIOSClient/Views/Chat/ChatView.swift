@@ -63,11 +63,11 @@ struct ChatView: View {
     }
 
     private var permissionIDs: String {
-        viewModel.selectedSessionPermissions.map { $0.id }.joined(separator: "|")
+        viewModel.permissions(for: sessionID).map { $0.id }.joined(separator: "|")
     }
 
     private var questionIDs: String {
-        viewModel.selectedSessionQuestions.map { $0.id }.joined(separator: "|")
+        viewModel.questions(for: sessionID).map { $0.id }.joined(separator: "|")
     }
 
     private var liveSession: OpenCodeSession {
@@ -92,6 +92,22 @@ struct ChatView: View {
             String(lastDisplayedMessageTextLength),
             shouldShowThinking ? "thinking" : "idle"
         ].joined(separator: "|")
+    }
+
+    private var isChildSession: Bool {
+        liveSession.parentID != nil
+    }
+
+    private var parentSession: OpenCodeSession? {
+        viewModel.parentSession(for: liveSession)
+    }
+
+    private var childSessionTitle: String {
+        viewModel.childSessionTitle(for: liveSession)
+    }
+
+    private var parentSessionTitle: String {
+        viewModel.parentSessionTitle(for: liveSession)
     }
 
     private var isNearBottom: Bool {
@@ -130,9 +146,15 @@ struct ChatView: View {
                             MessageBubble(
                                 message: message,
                                 detailedMessage: viewModel.toolMessageDetails[message.id],
-                                isStreamingMessage: isStreamingMessage(message)
+                                currentSessionID: sessionID,
+                                isStreamingMessage: isStreamingMessage(message),
+                                resolveTaskSessionID: { part, currentSessionID in
+                                    viewModel.resolveTaskSessionID(from: part, currentSessionID: currentSessionID)
+                                }
                             ) { part in
                                 selectedActivityDetail = ActivityDetail(message: message, part: part)
+                            } onOpenTaskSession: { taskSessionID in
+                                Task { await viewModel.openSession(sessionID: taskSessionID) }
                             }
                             .id(message.id)
                             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 12, trailing: 16))
@@ -268,7 +290,7 @@ struct ChatView: View {
         }
         .coordinateSpace(name: "chat-view-space")
         .ignoresSafeArea(.keyboard, edges: .bottom)
-        .navigationTitle(liveSession.title ?? "Session")
+        .navigationTitle(isChildSession ? childSessionTitle : (liveSession.title ?? "Session"))
         .opencodeInlineNavigationTitle()
         .toolbar { chatToolbar }
 #if DEBUG
@@ -378,9 +400,12 @@ struct ChatView: View {
                 .padding(.horizontal, 16)
             }
 
-            if !viewModel.selectedSessionPermissions.isEmpty {
+            let permissions = viewModel.permissions(for: sessionID)
+            let questions = viewModel.questions(for: sessionID)
+
+            if !permissions.isEmpty {
                 PermissionActionStack(
-                    permissions: viewModel.selectedSessionPermissions,
+                    permissions: permissions,
                     onDismiss: { permission in
                         viewModel.dismissPermission(permission)
                     },
@@ -390,9 +415,9 @@ struct ChatView: View {
                 )
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
-            } else if !viewModel.selectedSessionQuestions.isEmpty {
+            } else if !questions.isEmpty {
                 QuestionPanel(
-                    requests: viewModel.selectedSessionQuestions,
+                    requests: questions,
                     answers: $questionAnswers,
                     customAnswers: $questionCustomAnswers,
                     onDismiss: { request in
@@ -406,37 +431,71 @@ struct ChatView: View {
                 .padding(.vertical, 8)
             } else {
                 let isBusy = viewModel.sessionStatuses[liveSession.id] == "busy"
-                MessageComposer(
-                    text: $viewModel.draftMessage,
-                    isAccessoryMenuOpen: $isComposerMenuOpen,
-                    commands: viewModel.commands,
-                    attachmentCount: viewModel.draftAttachments.count,
-                    isBusy: isBusy,
-                    onInputFrameChange: { frame in
-                        composerInputFrame = frame
-                    },
-                    onSend: {
-                        startOutgoingBubbleAnimationAndSend()
-                    },
-                    onStop: {
-                        Task { await viewModel.stopCurrentSession() }
-                    },
-                    onSelectCommand: { command in
-                        shouldSnapOnNextMessage = true
-                        Task { await viewModel.sendCommand(command, sessionID: sessionID, userVisible: true) }
-                    },
-                    onAddAttachments: { attachments in
-                        viewModel.addDraftAttachments(attachments)
-                    }
-                )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(.clear)
+                if isChildSession {
+                    childSessionComposerNotice
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                } else {
+                    MessageComposer(
+                        text: $viewModel.draftMessage,
+                        isAccessoryMenuOpen: $isComposerMenuOpen,
+                        commands: viewModel.commands,
+                        attachmentCount: viewModel.draftAttachments.count,
+                        isBusy: isBusy,
+                        onInputFrameChange: { frame in
+                            composerInputFrame = frame
+                        },
+                        onSend: {
+                            startOutgoingBubbleAnimationAndSend()
+                        },
+                        onStop: {
+                            Task { await viewModel.stopCurrentSession() }
+                        },
+                        onSelectCommand: { command in
+                            shouldSnapOnNextMessage = true
+                            Task { await viewModel.sendCommand(command, sessionID: sessionID, userVisible: true) }
+                        },
+                        onAddAttachments: { attachments in
+                            viewModel.addDraftAttachments(attachments)
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.clear)
+                }
             }
         }
         .transaction { transaction in
             transaction.animation = nil
         }
+    }
+
+    private var childSessionComposerNotice: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.headline)
+                .foregroundStyle(.purple)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Subagent sessions cannot be prompted.")
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                Text("Return to the main session to continue the conversation.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 0)
+
+            Button("Back") {
+                guard let parentSession else { return }
+                Task { await viewModel.selectSession(parentSession) }
+            }
+            .buttonStyle(.bordered)
+            .tint(.purple)
+        }
+        .padding(12)
+        .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
     private var composerOverlay: some View {
@@ -655,6 +714,29 @@ struct ChatView: View {
                 .accessibilityLabel("Model Instructions")
             }
         } else {
+            if isChildSession {
+                ToolbarItem(placement: .opencodeLeading) {
+                    if let parentSession {
+                        Button("Back") {
+                            Task { await viewModel.selectSession(parentSession) }
+                        }
+                    }
+                }
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text(parentSessionTitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        Text(childSessionTitle)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: 220)
+                }
+            }
+
             ToolbarItem(placement: .opencodeTrailing) {
                 AgentToolbarMenu(viewModel: viewModel, session: liveSession, glassNamespace: toolbarGlassNamespace)
             }

@@ -3,10 +3,14 @@ import SwiftUI
 struct MessageBubble: View {
     let message: OpenCodeMessageEnvelope
     let detailedMessage: OpenCodeMessageEnvelope?
+    let currentSessionID: String?
     let isStreamingMessage: Bool
+    let resolveTaskSessionID: (OpenCodePart, String) -> String?
     let onSelectPart: (OpenCodePart) -> Void
+    let onOpenTaskSession: (String) -> Void
 
     @State private var expandedReasoningPartIDs: Set<String> = []
+    @State private var expandedContextGroupIDs: Set<String> = []
 
     private var effectiveMessage: OpenCodeMessageEnvelope {
         detailedMessage ?? message
@@ -24,13 +28,42 @@ struct MessageBubble: View {
         RoundedRectangle(cornerRadius: isUser ? 22 : 18, style: .continuous)
     }
 
+    private var displayEntries: [DisplayEntry] {
+        var result: [DisplayEntry] = []
+        var contextParts: [IndexedPart] = []
+
+        func flushContextParts() {
+            guard !contextParts.isEmpty else { return }
+            let firstID = contextParts.first?.part.id ?? "context"
+            result.append(.context(ContextGroup(id: "context-\(effectiveMessage.id)-\(firstID)", parts: contextParts)))
+            contextParts.removeAll()
+        }
+
+        for entry in Array(effectiveMessage.parts.enumerated()) {
+            let indexed = IndexedPart(index: entry.offset, part: entry.element)
+            if shouldGroupInContext(indexed.part) {
+                contextParts.append(indexed)
+            } else {
+                flushContextParts()
+                result.append(.part(indexed))
+            }
+        }
+
+        flushContextParts()
+        return result
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(Array(effectiveMessage.parts.enumerated()), id: \.offset) { entry in
-                let index = entry.offset
-                let part = entry.element
-                partView(part, index: index)
-                    .transition(.identity)
+            ForEach(displayEntries, id: \.id) { entry in
+                switch entry {
+                case let .part(indexed):
+                    partView(indexed.part, index: indexed.index)
+                        .transition(.identity)
+                case let .context(group):
+                    contextGroupView(group)
+                        .transition(.identity)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
@@ -45,13 +78,12 @@ struct MessageBubble: View {
             AttachmentBubblePart(attachment: attachment, isUser: isUser)
         } else if let text = renderableText(for: part) {
             if textStyle(for: part) == .reasoning {
-                let content =
-                    ReasoningBlock(
-                        text: text,
-                        isExpanded: isReasoningExpanded(part: part, index: index),
-                        isRunning: isReasoningRunning(part),
-                        onToggle: { toggleReasoning(part: part, index: index) }
-                    )
+                let content = ReasoningBlock(
+                    text: text,
+                    isExpanded: isReasoningExpanded(part: part, index: index),
+                    isRunning: isReasoningRunning(part),
+                    onToggle: { toggleReasoning(part: part, index: index) }
+                )
 
                 if isUser {
                     bubbleWrapped(content)
@@ -67,14 +99,13 @@ struct MessageBubble: View {
                     content
                 }
             }
-        } else if let activity = activityStyle(for: part, parts: effectiveMessage.parts, index: index) {
-            let content =
-                Button {
-                    onSelectPart(part)
-                } label: {
-                    ActivityRow(style: activity)
-                }
-                .buttonStyle(.plain)
+        } else if let activity = activityStyle(for: part) {
+            let content = Button {
+                handleActivityTap(for: part)
+            } label: {
+                ActivityRow(style: activity)
+            }
+            .buttonStyle(.plain)
 
             if isUser {
                 bubbleWrapped(content)
@@ -82,6 +113,54 @@ struct MessageBubble: View {
                 content
             }
         }
+    }
+
+    private func contextGroupView(_ group: ContextGroup) -> some View {
+        let isExpanded = expandedContextGroupIDs.contains(group.id)
+        let summary = contextSummary(for: group.parts)
+        let running = isStreamingMessage || group.parts.contains { isRunning($0.part) }
+        let title = running ? "Exploring" : "Explored"
+        let subtitle = contextSummaryText(summary)
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.spring(response: 0.32, dampingFraction: 0.84)) {
+                    toggleContextGroup(group.id)
+                }
+            } label: {
+                ContextToolGroupCard(
+                    style: ActivityStyle(
+                        title: title,
+                        subtitle: subtitle,
+                        icon: "square.stack.3d.up.fill",
+                        tint: .teal,
+                        isRunning: running,
+                        showsDisclosure: true,
+                        shimmerTitle: false
+                    ),
+                    expanded: isExpanded
+                )
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(group.parts, id: \.id) { indexed in
+                        if let style = activityStyle(for: indexed.part) {
+                            Button {
+                                handleActivityTap(for: indexed.part)
+                            } label: {
+                                ActivityRow(style: style, compact: true)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.leading, 10)
+                .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
+            }
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.84), value: isExpanded)
     }
 
     private func bubbleWrapped<Content: View>(_ content: Content) -> some View {
@@ -143,119 +222,281 @@ struct MessageBubble: View {
         }
     }
 
+    private func toggleContextGroup(_ id: String) {
+        if expandedContextGroupIDs.contains(id) {
+            expandedContextGroupIDs.remove(id)
+        } else {
+            expandedContextGroupIDs.insert(id)
+        }
+    }
+
     private func isReasoningRunning(_ part: OpenCodePart) -> Bool {
         isRunning(part) || isStreamingMessage
     }
 
-    private func activityStyle(for part: OpenCodePart, parts: [OpenCodePart], index: Int) -> ActivityStyle? {
-        let preview = activityPreview(for: part) ?? relatedPreview(for: parts, around: index)
+    private func shouldGroupInContext(_ part: OpenCodePart) -> Bool {
+        !isUser && renderableText(for: part) == nil && contextGroupTools.contains(toolName(for: part))
+    }
 
-        switch part.type {
-        case "step-start", "step-finish", "reasoning", "text":
+    private func handleActivityTap(for part: OpenCodePart) {
+        if toolName(for: part) == "task",
+           let currentSessionID,
+           let sessionID = resolveTaskSessionID(for: part, currentSessionID: currentSessionID) {
+            onOpenTaskSession(sessionID)
+            return
+        }
+
+        onSelectPart(part)
+    }
+
+    private func activityStyle(for part: OpenCodePart) -> ActivityStyle? {
+        let tool = toolName(for: part)
+        let running = isRunning(part)
+
+        switch tool {
+        case "", "step-start", "step-finish", "reasoning", "text":
             return nil
-        case "tool":
-            let title = part.state?.title ?? inferredToolTitle(from: preview)
-            let subtitle = toolPreview(for: part) ?? preview ?? toolSubtitle(for: part)
-            let icon = inferredToolIcon(from: part.tool ?? preview)
-            let tint = inferredToolTint(from: part.tool ?? preview)
-            return ActivityStyle(title: title, subtitle: subtitle, icon: icon, tint: tint, isRunning: isRunning(part))
+        case "todowrite":
+            return nil
         case "bash":
-            return ActivityStyle(title: preview ?? "Shell Command", subtitle: toolSubtitle(for: part, fallback: "Command"), icon: "terminal.fill", tint: .green, isRunning: isRunning(part))
+            return ActivityStyle(
+                title: "Shell",
+                subtitle: running ? nil : firstNonEmpty(part.state?.input?.description, toolSubtitle(for: part, fallback: nil)),
+                icon: "terminal.fill",
+                tint: .green,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: running
+            )
         case "read":
-            return ActivityStyle(title: preview ?? "Read File", subtitle: toolSubtitle(for: part, fallback: "File read"), icon: "doc.text.magnifyingglass", tint: .blue, isRunning: isRunning(part))
-        case "write":
-            return ActivityStyle(title: preview ?? "Write File", subtitle: toolSubtitle(for: part, fallback: "File write"), icon: "square.and.pencil", tint: .orange, isRunning: isRunning(part))
-        case "grep":
-            return ActivityStyle(title: preview ?? "Search Content", subtitle: toolSubtitle(for: part, fallback: "Content search"), icon: "line.3.horizontal.decrease.circle", tint: .mint, isRunning: isRunning(part))
+            return ActivityStyle(
+                title: "Read",
+                subtitle: firstNonEmpty(filename(from: part.state?.input?.filePath), filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
+                icon: "eyeglasses",
+                tint: .blue,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
+        case "list":
+            return ActivityStyle(
+                title: "List",
+                subtitle: firstNonEmpty(filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
+                icon: "list.bullet",
+                tint: .indigo,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
         case "glob":
-            return ActivityStyle(title: preview ?? "Find Files", subtitle: toolSubtitle(for: part, fallback: "File search"), icon: "folder.badge.questionmark", tint: .teal, isRunning: isRunning(part))
-        case "bash_output", "command":
-            return ActivityStyle(title: preview ?? "Command Output", subtitle: toolSubtitle(for: part, fallback: "Output"), icon: "chevron.left.forwardslash.chevron.right", tint: .gray, isRunning: isRunning(part))
+            return ActivityStyle(
+                title: "Glob",
+                subtitle: firstNonEmpty(part.state?.input?.pattern, filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
+                icon: "magnifyingglass",
+                tint: .teal,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
+        case "grep":
+            return ActivityStyle(
+                title: "Grep",
+                subtitle: firstNonEmpty(part.state?.input?.pattern, filename(from: part.state?.input?.path), toolSubtitle(for: part, fallback: nil)),
+                icon: "magnifyingglass.circle",
+                tint: .mint,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
+        case "webfetch":
+            return ActivityStyle(
+                title: "Webfetch",
+                subtitle: running ? nil : firstNonEmpty(part.state?.input?.url, toolSubtitle(for: part, fallback: nil)),
+                icon: "network",
+                tint: .teal,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: running
+            )
+        case "websearch":
+            return ActivityStyle(
+                title: "Web Search",
+                subtitle: firstNonEmpty(part.state?.input?.query, toolSubtitle(for: part, fallback: nil)),
+                icon: "globe",
+                tint: .teal,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
+        case "codesearch":
+            return ActivityStyle(
+                title: "Code Search",
+                subtitle: firstNonEmpty(part.state?.input?.query, toolSubtitle(for: part, fallback: nil)),
+                icon: "chevron.left.forwardslash.chevron.right",
+                tint: .purple,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
         case "task":
-            return ActivityStyle(title: preview ?? "Subtask", subtitle: toolSubtitle(for: part, fallback: "Delegated work"), icon: "square.stack.3d.up", tint: .purple, isRunning: isRunning(part))
+            let agent = taskAgentTitle(for: part)
+            let subtitle = firstNonEmpty(part.state?.input?.description, resolveTaskSessionID(for: part, currentSessionID: currentSessionID ?? ""), toolSubtitle(for: part, fallback: nil))
+            return ActivityStyle(
+                title: agent,
+                subtitle: subtitle,
+                icon: "square.stack.3d.up.fill",
+                tint: .purple,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
+        case "edit":
+            return ActivityStyle(
+                title: "Edit",
+                subtitle: firstNonEmpty(filename(from: part.state?.input?.filePath), toolSubtitle(for: part, fallback: nil)),
+                icon: "square.and.pencil",
+                tint: .orange,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
+        case "write":
+            return ActivityStyle(
+                title: "Write",
+                subtitle: firstNonEmpty(filename(from: part.state?.input?.filePath), toolSubtitle(for: part, fallback: nil)),
+                icon: "square.and.pencil",
+                tint: .orange,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
+        case "apply_patch":
+            let count = part.state?.metadata?.files?.count
+            let fileSummary = count.map { $0 == 1 ? "1 file" : "\($0) files" }
+            return ActivityStyle(
+                title: "Patch",
+                subtitle: firstNonEmpty(fileSummary, toolSubtitle(for: part, fallback: nil)),
+                icon: "hammer.fill",
+                tint: .orange,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
+        case "question":
+            return ActivityStyle(
+                title: "Questions",
+                subtitle: toolSubtitle(for: part, fallback: nil),
+                icon: "questionmark.bubble",
+                tint: .blue,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
+        case "skill":
+            return ActivityStyle(
+                title: firstNonEmpty(part.state?.input?.name, "Skill") ?? "Skill",
+                subtitle: toolSubtitle(for: part, fallback: nil),
+                icon: "brain",
+                tint: .indigo,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
         case "mcp":
-            return ActivityStyle(title: preview ?? "MCP Call", subtitle: toolSubtitle(for: part, fallback: "Tool bridge"), icon: "point.3.connected.trianglepath.dotted", tint: .pink, isRunning: isRunning(part))
+            return ActivityStyle(
+                title: "MCP",
+                subtitle: toolSubtitle(for: part, fallback: nil),
+                icon: "point.3.connected.trianglepath.dotted",
+                tint: .pink,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
         default:
-            return ActivityStyle(title: preview ?? part.type.replacingOccurrences(of: "-", with: " ").capitalized, subtitle: toolSubtitle(for: part, fallback: part.type.replacingOccurrences(of: "-", with: " ")), icon: "wrench.and.screwdriver.fill", tint: .secondary, isRunning: isRunning(part))
+            let title = part.state?.title ?? displayTitle(for: tool, fallback: part.type)
+            return ActivityStyle(
+                title: title,
+                subtitle: firstNonEmpty(part.state?.input?.description, toolSubtitle(for: part, fallback: nil)),
+                icon: "wrench.and.screwdriver.fill",
+                tint: .secondary,
+                isRunning: running,
+                showsDisclosure: true,
+                shimmerTitle: false
+            )
         }
     }
 
-    private func relatedPreview(for parts: [OpenCodePart], around index: Int) -> String? {
-        for candidate in parts.dropFirst(index + 1) {
-            if let preview = activityPreview(for: candidate) {
-                return preview
+    private func toolName(for part: OpenCodePart) -> String {
+        if part.type == "tool" {
+            return part.tool ?? ""
+        }
+        return part.tool ?? part.type
+    }
+
+    private func filename(from path: String?) -> String? {
+        guard let path, !path.isEmpty else { return nil }
+        return (path as NSString).lastPathComponent
+    }
+
+    private func taskAgentTitle(for part: OpenCodePart) -> String {
+        let trimmed = part.state?.input?.subagentType?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines) ?? ""
+        guard let first = trimmed.first else {
+            return "Agent"
+        }
+
+        let value = String(first).uppercased() + String(trimmed.dropFirst())
+        return "\(value) Agent"
+    }
+
+    private func resolveTaskSessionID(for part: OpenCodePart, currentSessionID: String) -> String? {
+        resolveTaskSessionID(part, currentSessionID)
+    }
+
+    private func displayTitle(for tool: String, fallback: String) -> String {
+        guard let first = tool.first else {
+            return fallback.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+
+        return String(first).uppercased() + tool.dropFirst()
+    }
+
+    private func contextSummary(for parts: [IndexedPart]) -> ContextSummary {
+        parts.reduce(into: ContextSummary()) { summary, indexed in
+            switch toolName(for: indexed.part) {
+            case "read":
+                summary.reads += 1
+            case "glob", "grep":
+                summary.searches += 1
+            case "list":
+                summary.lists += 1
+            default:
+                break
             }
         }
+    }
 
-        for candidate in parts.prefix(index).reversed() {
-            if let preview = activityPreview(for: candidate) {
-                return preview
-            }
+    private func contextSummaryText(_ summary: ContextSummary) -> String? {
+        var items: [String] = []
+        if summary.reads > 0 {
+            items.append(summary.reads == 1 ? "1 read" : "\(summary.reads) reads")
         }
-
-        return nil
-    }
-
-    private func activityPreview(for part: OpenCodePart) -> String? {
-        if let preview = toolPreview(for: part) {
-            return preview
+        if summary.searches > 0 {
+            items.append(summary.searches == 1 ? "1 search" : "\(summary.searches) searches")
         }
-
-        guard let raw = part.text?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else {
-            return nil
+        if summary.lists > 0 {
+            items.append(summary.lists == 1 ? "1 list" : "\(summary.lists) lists")
         }
-
-        let firstLine = raw.components(separatedBy: .newlines).first?.trimmingCharacters(in: .whitespacesAndNewlines) ?? raw
-        guard !firstLine.isEmpty else { return nil }
-
-        if ["bash", "command", "bash_output", "read", "write", "glob", "grep"].contains(part.type) {
-            return firstLine
-        }
-
-        return String(firstLine.prefix(60))
+        return items.isEmpty ? nil : items.joined(separator: ", ")
     }
 
-    private func toolPreview(for part: OpenCodePart) -> String? {
-        if let command = part.state?.input?.command?.trimmingCharacters(in: .whitespacesAndNewlines), !command.isEmpty { return command }
-        if let path = part.state?.input?.path?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty { return path }
-        if let query = part.state?.input?.query?.trimmingCharacters(in: .whitespacesAndNewlines), !query.isEmpty { return query }
-        if let pattern = part.state?.input?.pattern?.trimmingCharacters(in: .whitespacesAndNewlines), !pattern.isEmpty { return pattern }
-        if let url = part.state?.input?.url?.trimmingCharacters(in: .whitespacesAndNewlines), !url.isEmpty { return url }
-        if let description = part.state?.input?.description?.trimmingCharacters(in: .whitespacesAndNewlines), !description.isEmpty { return description }
-        return nil
+    private func firstNonEmpty(_ values: String?...) -> String? {
+        values.first { value in
+            guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
+            return !trimmed.isEmpty
+        } ?? nil
     }
 
-    private func inferredToolTitle(from preview: String?) -> String {
-        let lowercased = preview?.lowercased() ?? ""
-        if lowercased.contains("read") || lowercased.contains("file") { return "File Activity" }
-        if lowercased.contains("write") || lowercased.contains("patch") || lowercased.contains("edit") { return "Edit Activity" }
-        if lowercased.contains("search") || lowercased.contains("grep") || lowercased.contains("glob") || lowercased.contains("find") { return "Search Activity" }
-        if lowercased.contains("http") || lowercased.contains("fetch") || lowercased.contains("github") { return "Web Activity" }
-        if lowercased.contains("npm") || lowercased.contains("git") || lowercased.contains("xcodebuild") || lowercased.contains("curl") { return "Command Activity" }
-        return "Tool Activity"
-    }
-
-    private func inferredToolIcon(from preview: String?) -> String {
-        let lowercased = preview?.lowercased() ?? ""
-        if lowercased.contains("read") || lowercased.contains("file") { return "doc.text.magnifyingglass" }
-        if lowercased.contains("write") || lowercased.contains("patch") || lowercased.contains("edit") { return "square.and.pencil" }
-        if lowercased.contains("search") || lowercased.contains("grep") || lowercased.contains("glob") || lowercased.contains("find") { return "line.3.horizontal.decrease.circle" }
-        if lowercased.contains("http") || lowercased.contains("fetch") || lowercased.contains("github") { return "network" }
-        if lowercased.contains("npm") || lowercased.contains("git") || lowercased.contains("xcodebuild") || lowercased.contains("curl") { return "terminal.fill" }
-        return "hammer.fill"
-    }
-
-    private func inferredToolTint(from preview: String?) -> Color {
-        let lowercased = preview?.lowercased() ?? ""
-        if lowercased.contains("read") || lowercased.contains("file") { return .blue }
-        if lowercased.contains("write") || lowercased.contains("patch") || lowercased.contains("edit") { return .orange }
-        if lowercased.contains("search") || lowercased.contains("grep") || lowercased.contains("glob") || lowercased.contains("find") { return .mint }
-        if lowercased.contains("http") || lowercased.contains("fetch") || lowercased.contains("github") { return .teal }
-        if lowercased.contains("npm") || lowercased.contains("git") || lowercased.contains("xcodebuild") || lowercased.contains("curl") { return .green }
-        return .indigo
-    }
-
-    private func toolSubtitle(for part: OpenCodePart, fallback: String = "Running tool") -> String {
+    private func toolSubtitle(for part: OpenCodePart, fallback: String?) -> String? {
         if let status = part.state?.status?.lowercased() {
             switch status {
             case "completed", "complete", "success":
@@ -289,6 +530,79 @@ struct MessageBubble: View {
         }
         guard let reason = part.reason?.lowercased() else { return false }
         return reason == "start" || reason == "started" || reason == "running"
+    }
+}
+
+private let contextGroupTools: Set<String> = ["read", "glob", "grep", "list"]
+
+private struct IndexedPart: Identifiable {
+    let index: Int
+    let part: OpenCodePart
+
+    var id: String {
+        part.id ?? "part-\(index)-\(part.type)"
+    }
+}
+
+private struct ContextGroup {
+    let id: String
+    let parts: [IndexedPart]
+}
+
+private struct ContextSummary {
+    var reads = 0
+    var searches = 0
+    var lists = 0
+}
+
+private enum DisplayEntry: Identifiable {
+    case part(IndexedPart)
+    case context(ContextGroup)
+
+    var id: String {
+        switch self {
+        case let .part(indexed):
+            return indexed.id
+        case let .context(group):
+            return group.id
+        }
+    }
+}
+
+private struct ContextToolGroupCard: View {
+    let style: ActivityStyle
+    let expanded: Bool
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.55))
+                .offset(x: 6, y: 8)
+
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.8))
+                .offset(x: 3, y: 4)
+
+            ActivityRow(
+                style: ActivityStyle(
+                    title: style.title,
+                    subtitle: style.subtitle,
+                    icon: style.icon,
+                    tint: style.tint,
+                    isRunning: style.isRunning,
+                    showsDisclosure: true,
+                    shimmerTitle: style.shimmerTitle
+                )
+            )
+            .overlay(alignment: .trailing) {
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .padding(.trailing, 12)
+            }
+        }
+        .padding(.trailing, 6)
+        .padding(.bottom, 8)
     }
 }
 
