@@ -1,6 +1,8 @@
 import Foundation
 
 extension AppViewModel {
+    private static let maxRecentServerCount = 4
+
     func connect() async {
         isLoading = true
         defer { isLoading = false }
@@ -11,8 +13,6 @@ extension AppViewModel {
             serverVersion = bootstrap.health.version
             errorMessage = nil
             persistConfig()
-            hasSavedServer = true
-            showSavedServerPrompt = false
             loadNewSessionDefaults()
             projects = bootstrap.projects
             selectedDirectory = directorySelection(for: bootstrap.currentProject)
@@ -29,6 +29,17 @@ extension AppViewModel {
             directoryState = OpenCodeDirectoryState()
             errorMessage = error.localizedDescription
         }
+    }
+
+    func connect(to serverConfig: OpenCodeServerConfig) async {
+        config = serverConfig
+        await connect()
+    }
+
+    func prepareToEditRecentServer(_ serverConfig: OpenCodeServerConfig) {
+        config = serverConfig
+        errorMessage = nil
+        showSavedServerPrompt = false
     }
 
     func disconnect() {
@@ -62,8 +73,25 @@ extension AppViewModel {
     }
 
     func persistConfig() {
-        guard let data = try? JSONEncoder().encode(config) else { return }
-        UserDefaults.standard.set(data, forKey: StorageKey.lastServerConfig)
+        let recentConfigs = ([config] + recentServerConfigs)
+            .reduce(into: [OpenCodeServerConfig]()) { deduped, serverConfig in
+                guard serverConfig.hasCredentials else { return }
+                guard deduped.contains(where: { $0.recentServerID == serverConfig.recentServerID }) == false else { return }
+                deduped.append(serverConfig)
+            }
+
+        recentServerConfigs = Array(recentConfigs.prefix(Self.maxRecentServerCount))
+        hasSavedServer = recentServerConfigs.isEmpty == false
+        showSavedServerPrompt = false
+
+        guard let latestConfig = recentServerConfigs.first,
+              let latestData = try? JSONEncoder().encode(latestConfig),
+              let recentData = try? JSONEncoder().encode(recentServerConfigs) else {
+            return
+        }
+
+        UserDefaults.standard.set(latestData, forKey: StorageKey.lastServerConfig)
+        UserDefaults.standard.set(recentData, forKey: StorageKey.recentServerConfigs)
     }
 
     func loadSavedConfig() -> OpenCodeServerConfig? {
@@ -74,6 +102,44 @@ extension AppViewModel {
         return try? JSONDecoder().decode(OpenCodeServerConfig.self, from: data)
     }
 
+    func loadRecentServerConfigs() -> [OpenCodeServerConfig] {
+        if let data = UserDefaults.standard.data(forKey: StorageKey.recentServerConfigs),
+           let configs = try? JSONDecoder().decode([OpenCodeServerConfig].self, from: data) {
+            return Array(configs.prefix(Self.maxRecentServerCount))
+        }
+
+        if let savedConfig = loadSavedConfig() {
+            return [savedConfig]
+        }
+
+        return []
+    }
+
+    func removeRecentServer(_ serverConfig: OpenCodeServerConfig) {
+        recentServerConfigs.removeAll { $0.recentServerID == serverConfig.recentServerID }
+        hasSavedServer = recentServerConfigs.isEmpty == false
+        showSavedServerPrompt = hasSavedServer && showSavedServerPrompt
+
+        if config.recentServerID == serverConfig.recentServerID,
+           let replacement = recentServerConfigs.first {
+            config = replacement
+        }
+
+        if recentServerConfigs.isEmpty {
+            UserDefaults.standard.removeObject(forKey: StorageKey.lastServerConfig)
+            UserDefaults.standard.removeObject(forKey: StorageKey.recentServerConfigs)
+            return
+        }
+
+        guard let latestData = try? JSONEncoder().encode(recentServerConfigs[0]),
+              let recentData = try? JSONEncoder().encode(recentServerConfigs) else {
+            return
+        }
+
+        UserDefaults.standard.set(latestData, forKey: StorageKey.lastServerConfig)
+        UserDefaults.standard.set(recentData, forKey: StorageKey.recentServerConfigs)
+    }
+
     func configureUITestEnvironmentIfNeeded() -> Bool {
         let environment = ProcessInfo.processInfo.environment
         guard environment["OPENCODE_UI_TEST_MODE"] == "1" else {
@@ -81,6 +147,7 @@ extension AppViewModel {
         }
 
         UserDefaults.standard.removeObject(forKey: StorageKey.lastServerConfig)
+        UserDefaults.standard.removeObject(forKey: StorageKey.recentServerConfigs)
         config.baseURL = environment["OPENCODE_UI_TEST_BASE_URL"] ?? "http://127.0.0.1:4096"
         config.username = environment["OPENCODE_UI_TEST_USERNAME"] ?? "opencode"
         config.password = environment["OPENCODE_UI_TEST_PASSWORD"] ?? ""

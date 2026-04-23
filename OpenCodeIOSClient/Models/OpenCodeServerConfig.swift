@@ -13,7 +13,19 @@ struct OpenCodeServerConfig: Equatable, Codable {
         baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var trimmedUsername: String {
+        username.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var recentServerID: String {
+        "\(trimmedBaseURL.lowercased())|\(trimmedUsername.lowercased())"
+    }
+
+    var displayHost: String {
+        sanitizedBaseURL?.host() ?? trimmedBaseURL
+    }
+
     var hasCredentials: Bool {
-        !trimmedBaseURL.isEmpty && !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !trimmedBaseURL.isEmpty && !trimmedUsername.isEmpty
     }
 }

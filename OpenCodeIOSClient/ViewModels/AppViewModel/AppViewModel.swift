@@ -21,6 +21,7 @@ final class AppViewModel: ObservableObject {
 
     enum StorageKey {
         static let lastServerConfig = "lastServerConfig"
+        static let recentServerConfigs = "recentServerConfigs"
         static let newSessionDefaults = "newSessionDefaults"
     }
 
@@ -47,6 +48,7 @@ final class AppViewModel: ObservableObject {
     @Published var composerResetToken = UUID()
     @Published var errorMessage: String?
     @Published var isLoading = false
+    @Published var recentServerConfigs: [OpenCodeServerConfig] = []
     @Published var hasSavedServer = false
     @Published var showSavedServerPrompt = false
     @Published var isShowingCreateSessionSheet = false
@@ -86,7 +88,9 @@ final class AppViewModel: ObservableObject {
             return
         }
 
-        if let savedConfig = loadSavedConfig() {
+        let recentConfigs = loadRecentServerConfigs()
+        if let savedConfig = recentConfigs.first {
+            recentServerConfigs = recentConfigs
             config = savedConfig
             hasSavedServer = true
             showSavedServerPrompt = true

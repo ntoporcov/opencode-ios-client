@@ -20,3 +20,21 @@ import SwiftUI
         .navigationTitle("OpenCode")
     }
 }
+
+#Preview("Recent Servers") {
+    NavigationStack {
+        ConnectionView(
+            viewModel: AppViewModel.preview(
+                isConnected: false,
+                showSavedServerPrompt: true,
+                hasSavedServer: true,
+                recentServerConfigs: [
+                    OpenCodeServerConfig(baseURL: "http://10.0.1.12:4096", username: "nick", password: "secret"),
+                    OpenCodeServerConfig(baseURL: "https://lab.example.com", username: "dev", password: "secret"),
+                    OpenCodeServerConfig(baseURL: "http://192.168.1.44:4096", username: "team", password: "secret")
+                ]
+            )
+        )
+        .navigationTitle("OpenCode")
+    }
+}

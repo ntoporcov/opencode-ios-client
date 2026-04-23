@@ -16,6 +16,7 @@ extension AppViewModel {
         errorMessage: String? = nil,
         showSavedServerPrompt: Bool = false,
         hasSavedServer: Bool = false,
+        recentServerConfigs: [OpenCodeServerConfig]? = nil,
         isShowingCreateSessionSheet: Bool = false,
         draftTitle: String = "",
         draftMessage: String = "Polish the chat spacing a bit.",
@@ -46,6 +47,11 @@ extension AppViewModel {
         viewModel.errorMessage = errorMessage
         viewModel.showSavedServerPrompt = showSavedServerPrompt
         viewModel.hasSavedServer = hasSavedServer
+        if let recentServerConfigs {
+            viewModel.recentServerConfigs = recentServerConfigs
+        } else if hasSavedServer {
+            viewModel.recentServerConfigs = [OpenCodePreviewData.config]
+        }
         viewModel.isShowingCreateSessionSheet = isShowingCreateSessionSheet
         viewModel.draftTitle = draftTitle
         viewModel.draftMessage = draftMessage
