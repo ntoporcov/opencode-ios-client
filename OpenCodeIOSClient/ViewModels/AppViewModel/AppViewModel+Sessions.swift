@@ -363,6 +363,7 @@ extension AppViewModel {
                 await self?.logServerMessageSnapshot(for: selectedSession, reason: "post-send 2s")
             }
             startLiveRefresh(for: selectedSession, reason: "send")
+            refreshLiveActivityIfNeeded(for: selectedSession.id)
             errorMessage = nil
         } catch {
             if userVisible {
@@ -402,6 +403,7 @@ extension AppViewModel {
         reconcileOptimisticUserMessages()
         syncComposerSelections(for: session)
         prefetchToolMessageDetails(for: session, messages: directoryState.messages)
+        refreshLiveActivityIfNeeded(for: session.id)
         await loadTodos(for: session)
     }
 
@@ -532,10 +534,12 @@ extension AppViewModel {
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.todos = todos
             }
+            refreshLiveActivityIfNeeded(for: session.id)
         } catch {
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.todos = []
             }
+            refreshLiveActivityIfNeeded(for: session.id)
         }
     }
 
@@ -545,10 +549,12 @@ extension AppViewModel {
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.permissions = permissions
             }
+            refreshLiveActivityIfNeeded(for: selectedSession?.id)
         } catch {
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.permissions = []
             }
+            refreshLiveActivityIfNeeded(for: selectedSession?.id)
         }
     }
 
@@ -562,10 +568,12 @@ extension AppViewModel {
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.questions = questions
             }
+            refreshLiveActivityIfNeeded(for: selectedSession?.id)
         } catch {
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.questions = []
             }
+            refreshLiveActivityIfNeeded(for: selectedSession?.id)
         }
     }
 
@@ -618,6 +626,7 @@ extension AppViewModel {
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.permissions.removeAll { $0.id == permission.id }
             }
+            refreshLiveActivityIfNeeded(for: permission.sessionID)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -627,6 +636,7 @@ extension AppViewModel {
         withAnimation(opencodeSelectionAnimation) {
             directoryState.permissions.removeAll { $0.id == permission.id }
         }
+        refreshLiveActivityIfNeeded(for: permission.sessionID)
     }
 
     func respondToQuestion(_ request: OpenCodeQuestionRequest, answers: [[String]]) async {
@@ -642,6 +652,7 @@ extension AppViewModel {
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.questions.removeAll { $0.id == request.id }
             }
+            refreshLiveActivityIfNeeded(for: request.sessionID)
         } catch {
             errorMessage = error.localizedDescription
         }

@@ -22,17 +22,32 @@ targets:
       - path: OpenCodeIOSClient
         excludes:
           - OpenCodeMacApp.swift
+          - Info.plist
+          - Generated-Info.plist
+      - path: OpenCodeShared
       - path: AppIcon.icon
         buildPhase: resources
         group: OpenCodeIOSClient
+    dependencies:
+      - target: OpenCodeChatActivityExtension
+        embed: true
+    info:
+      path: OpenCodeIOSClient/Generated-Info.plist
+      properties:
+        CFBundleDisplayName: OpenCode
+        UIApplicationSupportsIndirectInputEvents: true
+        NSSupportsLiveActivities: true
+        UILaunchScreen: {}
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        CFBundleURLTypes:
+          - CFBundleURLName: com.ntoporcov.opencode-client
+            CFBundleURLSchemes:
+              - opencode
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.opencode-client
         PRODUCT_NAME: OpenCodeIOSClient
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: OpenCode
-        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
@@ -45,6 +60,27 @@ targets:
       testTargets:
         - OpenCodeIOSClientTests
         - OpenCodeIOSClientUITests
+  OpenCodeChatActivityExtension:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: OpenCodeChatActivityExtension
+        excludes:
+          - Info.plist
+      - path: OpenCodeShared
+    info:
+      path: OpenCodeChatActivityExtension/Info.plist
+      properties:
+        CFBundleDisplayName: OpenCode Live
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.opencode-client.liveactivity
+        PRODUCT_NAME: OpenCodeChatActivityExtension
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
   OpenCodeMacClient:
     type: application
     platform: macOS

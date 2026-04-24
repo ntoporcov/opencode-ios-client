@@ -156,6 +156,16 @@ struct SessionListView: View {
             SessionDragOverlay(title: session.title ?? "Untitled Session")
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                Task { await viewModel.toggleLiveActivity(for: session) }
+            } label: {
+                Label(
+                    viewModel.isLiveActivityActive(for: session) ? "Stop Live" : "Live",
+                    systemImage: viewModel.isLiveActivityActive(for: session) ? "waveform.slash" : "waveform"
+                )
+            }
+            .tint(.indigo)
+
             if viewModel.isSessionPinned(session) {
                 Button {
                     withAnimation(opencodeSelectionAnimation) {

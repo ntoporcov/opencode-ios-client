@@ -7,6 +7,9 @@ struct OpenCodeIOSClientApp: App {
     var body: some Scene {
         WindowGroup {
             RootView(viewModel: viewModel)
+                .onOpenURL { url in
+                    Task { await viewModel.handleLiveActivityURL(url) }
+                }
         }
     }
 }

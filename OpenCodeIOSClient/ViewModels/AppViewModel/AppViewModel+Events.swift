@@ -203,6 +203,11 @@ extension AppViewModel {
         switch managed.typed {
         case let .sessionDeleted(session):
             removeSessionPreview(for: session.id)
+            if activeLiveActivitySessionID == session.id {
+                Task { [weak self] in
+                    await self?.stopLiveActivity(immediate: true)
+                }
+            }
         case let .vcsBranchUpdated(branch):
             directoryState.vcsInfo = OpenCodeVCSInfo(branch: branch, defaultBranch: directoryState.vcsInfo?.defaultBranch)
             refreshVCSFromEvent()
@@ -231,6 +236,9 @@ extension AppViewModel {
                 }
             }
         }
+
+        let shouldEndLiveActivity = if case .idle = result { true } else { false }
+        refreshLiveActivityIfNeeded(for: managedEventSessionID(for: managed), endIfIdle: shouldEndLiveActivity)
     }
 
     private func shouldApplyDirectoryEvent(from managed: OpenCodeManagedEvent) -> Bool {

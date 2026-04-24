@@ -83,6 +83,7 @@ final class AppViewModel: ObservableObject {
     @Published var selectedModelsBySessionID: [String: OpenCodeModelReference] = [:]
     @Published var selectedVariantsBySessionID: [String: String] = [:]
     @Published var newSessionDefaults = NewSessionDefaults()
+    @Published var activeLiveActivitySessionID: String?
 
     let eventManager = OpenCodeEventManager()
     var eventStreamRestartTask: Task<Void, Never>?
