@@ -72,6 +72,7 @@ extension AppViewModel {
         let bootstrap = try await OpenCodeBootstrap.bootstrapDirectory(client: client, directory: effectiveSelectedDirectory)
         withAnimation(opencodeSelectionAnimation) {
             directoryState.sessions = bootstrap.sessions
+            prunePinnedSessionsForCurrentScope()
         }
         withAnimation(opencodeSelectionAnimation) {
             directoryState.commands = bootstrap.commands
@@ -666,6 +667,7 @@ extension AppViewModel {
     func deleteSession(_ session: OpenCodeSession) async {
         do {
             try await client.deleteSession(sessionID: session.id)
+            unpinSession(session)
             removeSessionPreview(for: session.id)
             if directoryState.selectedSession?.id == session.id {
                 withAnimation(opencodeSelectionAnimation) {

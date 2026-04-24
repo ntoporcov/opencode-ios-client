@@ -21,6 +21,21 @@ extension AppViewModel {
         return currentProject.worktree
     }
 
+    var currentPinScopeKey: String {
+        if isUsingAppleIntelligence {
+            return [
+                "apple-intelligence",
+                activeAppleIntelligenceWorkspaceID ?? "global",
+            ].joined(separator: "|")
+        }
+
+        return [
+            "server",
+            config.recentServerID,
+            effectiveSelectedDirectory ?? "global",
+        ].joined(separator: "|")
+    }
+
     func presentProjectPicker() {
         withAnimation(opencodeSelectionAnimation) {
             isShowingProjectPicker = true
@@ -390,9 +405,22 @@ extension AppViewModel {
         return decoded
     }
 
+    func loadPinnedSessionIDsByScope() -> [String: [String]] {
+        guard let data = UserDefaults.standard.data(forKey: StorageKey.pinnedSessionsByScope),
+              let decoded = try? JSONDecoder().decode([String: [String]].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+
     func persistSessionPreviews() {
         guard let data = try? JSONEncoder().encode(sessionPreviews) else { return }
         UserDefaults.standard.set(data, forKey: StorageKey.sessionPreviews)
+    }
+
+    func persistPinnedSessionIDsByScope() {
+        guard let data = try? JSONEncoder().encode(pinnedSessionIDsByScope) else { return }
+        UserDefaults.standard.set(data, forKey: StorageKey.pinnedSessionsByScope)
     }
 
     func setSessionPreview(_ preview: SessionPreview, for sessionID: String) {
@@ -403,6 +431,73 @@ extension AppViewModel {
     func removeSessionPreview(for sessionID: String) {
         sessionPreviews[sessionID] = nil
         persistSessionPreviews()
+    }
+
+    func isSessionPinned(_ session: OpenCodeSession) -> Bool {
+        pinnedSessionIDs.contains(session.id)
+    }
+
+    func pinSession(_ session: OpenCodeSession, at targetIndex: Int? = nil) {
+        guard session.isRootSession else { return }
+        withAnimation(opencodeSelectionAnimation) {
+            insertPinnedSession(withID: session.id, at: targetIndex ?? pinnedSessionIDs.count)
+        }
+    }
+
+    func unpinSession(_ session: OpenCodeSession) {
+        withAnimation(opencodeSelectionAnimation) {
+            setPinnedSessionIDs(pinnedSessionIDs.filter { $0 != session.id })
+        }
+    }
+
+    func movePinnedSessions(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        var ids = pinnedSessionIDs
+        ids.move(fromOffsets: offsets, toOffset: destination)
+        withAnimation(opencodeSelectionAnimation) {
+            setPinnedSessionIDs(ids)
+        }
+    }
+
+    func insertPinnedSession(withID sessionID: String, at targetIndex: Int) {
+        guard sessions.contains(where: { $0.id == sessionID }) else { return }
+
+        var ids = pinnedSessionIDs
+        let boundedTarget = min(max(targetIndex, 0), ids.count)
+
+        if let currentIndex = ids.firstIndex(of: sessionID) {
+            ids.remove(at: currentIndex)
+            let adjustedTarget = currentIndex < boundedTarget ? boundedTarget - 1 : boundedTarget
+            ids.insert(sessionID, at: min(max(adjustedTarget, 0), ids.count))
+        } else {
+            ids.insert(sessionID, at: boundedTarget)
+        }
+
+        withAnimation(opencodeSelectionAnimation) {
+            setPinnedSessionIDs(ids)
+        }
+    }
+
+    func prunePinnedSessionsForCurrentScope() {
+        let visibleSessionIDs = Set(sessions.map(\.id))
+        setPinnedSessionIDs(pinnedSessionIDs.filter { visibleSessionIDs.contains($0) })
+    }
+
+    func setPinnedSessionIDs(_ sessionIDs: [String], for scopeKey: String? = nil) {
+        let key = scopeKey ?? currentPinScopeKey
+        var deduplicated: [String] = []
+        var seen = Set<String>()
+
+        for sessionID in sessionIDs where seen.insert(sessionID).inserted {
+            deduplicated.append(sessionID)
+        }
+
+        if deduplicated.isEmpty {
+            pinnedSessionIDsByScope[key] = nil
+        } else {
+            pinnedSessionIDsByScope[key] = deduplicated
+        }
+
+        persistPinnedSessionIDsByScope()
     }
 
     func refreshSessionPreview(for sessionID: String, messages: [OpenCodeMessageEnvelope]) {

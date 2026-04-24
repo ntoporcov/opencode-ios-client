@@ -27,6 +27,7 @@ final class AppViewModel: ObservableObject {
         static let newSessionDefaults = "newSessionDefaults"
         static let appleIntelligenceWorkspaces = "appleIntelligenceWorkspaces"
         static let sessionPreviews = "sessionPreviews"
+        static let pinnedSessionsByScope = "pinnedSessionsByScope"
     }
 
     @Published var config = OpenCodeServerConfig()
@@ -50,6 +51,7 @@ final class AppViewModel: ObservableObject {
     @Published var directoryState = OpenCodeDirectoryState()
     @Published var toolMessageDetails: [String: OpenCodeMessageEnvelope] = [:]
     @Published var sessionPreviews: [String: SessionPreview] = [:]
+    @Published var pinnedSessionIDsByScope: [String: [String]] = [:]
     @Published var draftTitle = ""
     @Published var draftMessage = ""
     @Published var draftAttachments: [OpenCodeComposerAttachment] = []
@@ -112,6 +114,7 @@ final class AppViewModel: ObservableObject {
         appleIntelligenceUserInstructions = defaultAppleIntelligenceUserInstructions
         appleIntelligenceSystemInstructions = defaultAppleIntelligenceSystemInstructions
         sessionPreviews = loadSessionPreviews()
+        pinnedSessionIDsByScope = loadPinnedSessionIDsByScope()
         if let savedConfig = recentConfigs.first {
             recentServerConfigs = recentConfigs
             config = savedConfig
@@ -142,6 +145,20 @@ final class AppViewModel: ObservableObject {
     }
 
     var sessions: [OpenCodeSession] { directoryState.sessions.filter(\.isRootSession) }
+
+    var pinnedSessionIDs: [String] {
+        pinnedSessionIDsByScope[currentPinScopeKey] ?? []
+    }
+
+    var pinnedRootSessions: [OpenCodeSession] {
+        let sessionsByID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
+        return pinnedSessionIDs.compactMap { sessionsByID[$0] }
+    }
+
+    var unpinnedRootSessions: [OpenCodeSession] {
+        let pinnedIDs = Set(pinnedSessionIDs)
+        return sessions.filter { !pinnedIDs.contains($0.id) }
+    }
 
     var selectedSession: OpenCodeSession? {
         get { directoryState.selectedSession }
