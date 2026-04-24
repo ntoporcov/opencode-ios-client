@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if DEBUG
 #Preview("Disconnected") {
     RootView(viewModel: AppViewModel.preview(isConnected: false))
 }
@@ -7,3 +8,4 @@ import SwiftUI
 #Preview("Connected") {
     RootView(viewModel: AppViewModel.preview())
 }
+#endif

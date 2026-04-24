@@ -12,8 +12,10 @@ private struct OpenCodeLiveActivityQuestionReplyRequest: Encodable {
 struct OpenCodeLiveActivityActionClient {
     let baseURL: String
     let username: String
-    let password: String
+    let credentialID: String
     var session: URLSession = .shared
+
+    private let passwordStore = OpenCodeServerPasswordStore()
 
     func replyToPermission(requestID: String, reply: String, directory: String?, workspaceID: String?) async throws {
         try await sendNoContent(
@@ -42,7 +44,7 @@ struct OpenCodeLiveActivityActionClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(basicAuthHeader(), forHTTPHeaderField: "Authorization")
+        request.setValue(try basicAuthHeader(), forHTTPHeaderField: "Authorization")
 
         if let directory, !directory.isEmpty {
             request.setValue(directory, forHTTPHeaderField: "x-opencode-directory")
@@ -74,7 +76,10 @@ struct OpenCodeLiveActivityActionClient {
         return components.url
     }
 
-    private func basicAuthHeader() -> String {
+    private func basicAuthHeader() throws -> String {
+        guard let password = passwordStore.loadPassword(for: credentialID) else {
+            throw OpenCodeLiveActivityActionError.missingCredentials
+        }
         let credentials = "\(username):\(password)"
         let encoded = Data(credentials.utf8).base64EncodedString()
         return "Basic \(encoded)"
@@ -83,5 +88,6 @@ struct OpenCodeLiveActivityActionClient {
 
 enum OpenCodeLiveActivityActionError: Error {
     case invalidURL
+    case missingCredentials
     case requestFailed
 }

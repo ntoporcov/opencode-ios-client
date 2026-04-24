@@ -18,11 +18,13 @@ struct ProjectListView: View {
                     )
                     .contentShape(Rectangle())
                     .onTapGesture {
+                        viewModel.currentProject = project
+                        viewModel.prepareDirectorySelection(project.id == "global" ? nil : project.worktree)
+                        withAnimation(opencodeSelectionAnimation) {
+                            onProjectChosen()
+                        }
                         Task {
                             await viewModel.selectProject(project)
-                            withAnimation(opencodeSelectionAnimation) {
-                                onProjectChosen()
-                            }
                         }
                     }
                 }

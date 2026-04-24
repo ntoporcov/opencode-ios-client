@@ -35,9 +35,9 @@ extension AppViewModel {
                     attributes: OpenCodeChatActivityAttributes(
                         sessionID: sessionID,
                         sessionTitle: sessionTitle,
+                        credentialID: configSnapshot.recentServerID,
                         serverBaseURL: configSnapshot.baseURL,
                         serverUsername: configSnapshot.username,
-                        serverPassword: configSnapshot.password,
                         directory: sessionDirectory,
                         workspaceID: workspaceID
                     ),
@@ -129,6 +129,12 @@ extension AppViewModel {
             return
         }
 
+        if !isConnected {
+            guard hasSavedServer else { return }
+            await connect()
+            guard isConnected else { return }
+        }
+
         let pathComponents = url.pathComponents
         guard pathComponents.count >= 3, pathComponents[1] == "session" else { return }
 
@@ -195,7 +201,7 @@ extension AppViewModel {
             let optionLabels = Array(firstQuestion.options.map(\.label).prefix(3))
             let canReplyInline = pendingQuestion.questions.count == 1 &&
                 firstQuestion.multiple == false &&
-                firstQuestion.custom != true &&
+                optionLabels.isEmpty == false &&
                 optionLabels.count == firstQuestion.options.count
 
             return OpenCodeChatActivityAttributes.ContentState(

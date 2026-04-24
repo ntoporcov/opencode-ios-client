@@ -6,6 +6,7 @@ DerivedData/
 .derived-data-device/
 .derivedData-device/
 .derivedData*/
+**/.derived-data-screenshots*
 build/
 BuildDevice/
 *.xcresult/
@@ -13,6 +14,10 @@ BuildDevice/
 # User-specific Xcode state
 xcuserdata/
 *.xcuserstate
+project.local.yml
+*.local.xcconfig
+fastlane/.env*
+!fastlane/.env.default
 
 # Local scratch space
 tmp/

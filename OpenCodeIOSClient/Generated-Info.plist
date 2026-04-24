@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>OpenCode</string>
+	<string>OpenClient</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,10 +22,10 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.ntoporcov.opencode-client</string>
+			<string>com.ntoporcov.openclient</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>opencode</string>
+				<string>openclient</string>
 			</array>
 		</dict>
 	</array>
@@ -38,9 +38,22 @@
 	</dict>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>OpenCodeSharedKeychainAccessGroup</key>
+	<string>$(AppIdentifierPrefix)com.ntoporcov.openclient.shared</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
 </dict>
 </plist>

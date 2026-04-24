@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if DEBUG
 #Preview("Connection Form") {
     NavigationStack {
         ConnectionView(viewModel: AppViewModel.preview(isConnected: false))
@@ -20,7 +21,6 @@ import SwiftUI
         .navigationTitle("OpenCode")
     }
 }
-
 #Preview("Recent Servers") {
     NavigationStack {
         ConnectionView(
@@ -55,3 +55,4 @@ import SwiftUI
         .navigationTitle("OpenCode")
     }
 }
+#endif

@@ -379,8 +379,10 @@ struct OpenCodeProvidersResponse: Codable, Hashable, Sendable {
 }
 
 struct OpenCodeDirectoryState: Equatable, Sendable {
+    var isLoadingSessions = false
     var sessions: [OpenCodeSession] = []
     var selectedSession: OpenCodeSession?
+    var isLoadingSelectedSession = false
     var messages: [OpenCodeMessageEnvelope] = []
     var commands: [OpenCodeCommand] = []
     var sessionStatuses: [String: String] = [:]

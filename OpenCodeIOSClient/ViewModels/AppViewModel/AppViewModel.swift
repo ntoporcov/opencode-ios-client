@@ -22,7 +22,6 @@ final class AppViewModel: ObservableObject {
     }
 
     enum StorageKey {
-        static let lastServerConfig = "lastServerConfig"
         static let recentServerConfigs = "recentServerConfigs"
         static let newSessionDefaults = "newSessionDefaults"
         static let appleIntelligenceWorkspaces = "appleIntelligenceWorkspaces"
@@ -88,6 +87,8 @@ final class AppViewModel: ObservableObject {
     @Published var activeLiveActivitySessionIDs: Set<String> = []
     @Published var activeChatSessionID: String?
 
+    let passwordStore = OpenCodeServerPasswordStore()
+
     let eventManager = OpenCodeEventManager()
     var eventStreamRestartTask: Task<Void, Never>?
     var reloadTask: Task<Void, Never>?
@@ -121,11 +122,11 @@ final class AppViewModel: ObservableObject {
         sessionPreviews = loadSessionPreviews()
         pinnedSessionIDsByScope = loadPinnedSessionIDsByScope()
         liveActivityAutoStartByScope = loadLiveActivityAutoStartByScope()
+        recentServerConfigs = recentConfigs
+        hasSavedServer = recentConfigs.isEmpty == false
+        showSavedServerPrompt = hasSavedServer
         if let savedConfig = recentConfigs.first {
-            recentServerConfigs = recentConfigs
             config = savedConfig
-            hasSavedServer = true
-            showSavedServerPrompt = true
         }
     }
 

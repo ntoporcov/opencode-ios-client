@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if DEBUG
 #Preview("Project List") {
     NavigationStack {
         ProjectListView(viewModel: AppViewModel.preview()) {}
@@ -17,3 +18,4 @@ import SwiftUI
     }
     .listStyle(.plain)
 }
+#endif

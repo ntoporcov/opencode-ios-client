@@ -1,5 +1,4 @@
 import ActivityKit
-import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -200,18 +199,28 @@ private struct OpenCodeChatActivityActions: View {
         if context.state.pendingInteractionKind == "permission",
            let requestID = context.state.interactionID {
             HStack(spacing: 8) {
-                let allowIntent = permissionIntent(requestID: requestID, reply: "allow")
-                actionButton(
+                actionLink(
                     title: "Allow Once",
-                    intent: allowIntent,
+                    destination: OpenCodeChatActivityDeepLink.permissionURL(
+                        sessionID: context.attributes.sessionID,
+                        requestID: requestID,
+                        reply: "allow",
+                        directory: context.attributes.directory,
+                        workspaceID: context.attributes.workspaceID
+                    ),
                     tint: .green
                 )
                 .frame(maxWidth: .infinity)
 
-                let denyIntent = permissionIntent(requestID: requestID, reply: "deny")
-                actionButton(
+                actionLink(
                     title: "Deny",
-                    intent: denyIntent,
+                    destination: OpenCodeChatActivityDeepLink.permissionURL(
+                        sessionID: context.attributes.sessionID,
+                        requestID: requestID,
+                        reply: "deny",
+                        directory: context.attributes.directory,
+                        workspaceID: context.attributes.workspaceID
+                    ),
                     tint: .red
                 )
                 .frame(maxWidth: .infinity)
@@ -221,10 +230,15 @@ private struct OpenCodeChatActivityActions: View {
                   context.state.canReplyToQuestionInline {
             HStack(spacing: 8) {
                 ForEach(context.state.questionOptionLabels, id: \.self) { option in
-                    let replyIntent = questionIntent(requestID: requestID, answer: option)
-                    actionButton(
+                    actionLink(
                         title: option,
-                        intent: replyIntent,
+                        destination: OpenCodeChatActivityDeepLink.questionURL(
+                            sessionID: context.attributes.sessionID,
+                            requestID: requestID,
+                            answer: option,
+                            directory: context.attributes.directory,
+                            workspaceID: context.attributes.workspaceID
+                        ),
                         tint: .blue
                     )
                     .frame(maxWidth: .infinity)
@@ -261,45 +275,6 @@ private struct OpenCodeChatActivityActions: View {
         }
     }
 
-    private func actionButton<IntentType: AppIntent>(title: String, intent: IntentType, tint: Color) -> some View {
-        Button(intent: intent) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 10)
-                .background(tint, in: Capsule())
-                .foregroundStyle(.white)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func permissionIntent(requestID: String, reply: String) -> OpenCodeReplyPermissionIntent {
-        var intent = OpenCodeReplyPermissionIntent()
-        intent.sessionID = context.attributes.sessionID
-        intent.requestID = requestID
-        intent.reply = reply
-        intent.baseURL = context.attributes.serverBaseURL
-        intent.username = context.attributes.serverUsername
-        intent.password = context.attributes.serverPassword
-        intent.directory = context.attributes.directory
-        intent.workspaceID = context.attributes.workspaceID
-        return intent
-    }
-
-    private func questionIntent(requestID: String, answer: String) -> OpenCodeReplyQuestionIntent {
-        var intent = OpenCodeReplyQuestionIntent()
-        intent.sessionID = context.attributes.sessionID
-        intent.requestID = requestID
-        intent.answer = answer
-        intent.baseURL = context.attributes.serverBaseURL
-        intent.username = context.attributes.serverUsername
-        intent.password = context.attributes.serverPassword
-        intent.directory = context.attributes.directory
-        intent.workspaceID = context.attributes.workspaceID
-        return intent
-    }
 }
 
 private struct OpenCodeChatActivityAvatar: View {

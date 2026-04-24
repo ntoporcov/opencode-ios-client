@@ -1,5 +1,5 @@
 import XCTest
-@testable import OpenCodeIOSClient
+@testable import OpenClient
 
 @MainActor
 final class AppViewModelTests: XCTestCase {

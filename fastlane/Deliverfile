@@ -1,0 +1,13 @@
+app_identifier("com.ntoporcov.openclient")
+
+metadata_path("./metadata")
+
+copyright(ENV["APP_STORE_COPYRIGHT"]) if ENV["APP_STORE_COPYRIGHT"]
+
+localized_support_url = ENV["APP_STORE_SUPPORT_URL"] ? { "default" => ENV["APP_STORE_SUPPORT_URL"] } : nil
+localized_marketing_url = ENV["APP_STORE_MARKETING_URL"] ? { "default" => ENV["APP_STORE_MARKETING_URL"] } : nil
+localized_privacy_url = ENV["APP_STORE_PRIVACY_URL"] ? { "default" => ENV["APP_STORE_PRIVACY_URL"] } : nil
+
+support_url(localized_support_url) if localized_support_url
+marketing_url(localized_marketing_url) if localized_marketing_url
+privacy_url(localized_privacy_url) if localized_privacy_url

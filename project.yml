@@ -1,3 +1,7 @@
+include:
+  - path: project.local.yml
+    enable: ${INCLUDE_PROJECT_LOCAL_YAML}
+
 name: OpenCodeIOSClient
 options:
   minimumXcodeGenVersion: 2.44.1
@@ -12,11 +16,24 @@ settings:
     SWIFT_VERSION: 6.0
     CURRENT_PROJECT_VERSION: 1
     MARKETING_VERSION: 0.1.0
-    DEVELOPMENT_TEAM: "845JU3PD5V"
+  configs:
+    Debug:
+      SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+schemes:
+  OpenCodeIOSClientScreenshots:
+    build:
+      targets:
+        OpenCodeIOSClient: all
+        OpenCodeIOSClientUITests: [testing]
+    test:
+      config: Debug
+      targets:
+        - OpenCodeIOSClientUITests
 targets:
   OpenCodeIOSClient:
     type: application
     platform: iOS
+    supportedDestinations: [iOS]
     deploymentTarget: "17.0"
     sources:
       - path: OpenCodeIOSClient
@@ -34,20 +51,30 @@ targets:
     info:
       path: OpenCodeIOSClient/Generated-Info.plist
       properties:
-        CFBundleDisplayName: OpenCode
+        CFBundleDisplayName: OpenClient
         UIApplicationSupportsIndirectInputEvents: true
         NSSupportsLiveActivities: true
+        OpenCodeSharedKeychainAccessGroup: $(AppIdentifierPrefix)com.ntoporcov.openclient.shared
+        ITSAppUsesNonExemptEncryption: false
         UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         CFBundleURLTypes:
-          - CFBundleURLName: com.ntoporcov.opencode-client
+          - CFBundleURLName: com.ntoporcov.openclient
             CFBundleURLSchemes:
-              - opencode
+              - openclient
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.opencode-client
-        PRODUCT_NAME: OpenCodeIOSClient
+        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.openclient
+        PRODUCT_NAME: OpenClient
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
@@ -55,6 +82,7 @@ targets:
         SUPPORTS_MACCATALYST: NO
         SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
         SWIFT_EMIT_LOC_STRINGS: YES
+        CODE_SIGN_ENTITLEMENTS: OpenCodeIOSClient/OpenCodeIOSClient.entitlements
     scheme:
       gatherCoverageData: false
       testTargets:
@@ -63,6 +91,7 @@ targets:
   OpenCodeChatActivityExtension:
     type: app-extension
     platform: iOS
+    supportedDestinations: [iOS]
     deploymentTarget: "17.0"
     sources:
       - path: OpenCodeChatActivityExtension
@@ -72,17 +101,20 @@ targets:
     info:
       path: OpenCodeChatActivityExtension/Info.plist
       properties:
-        CFBundleDisplayName: OpenCode Live
+        CFBundleDisplayName: OpenClient Live
+        OpenCodeSharedKeychainAccessGroup: $(AppIdentifierPrefix)com.ntoporcov.openclient.shared
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.opencode-client.liveactivity
+        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.openclient.liveactivity
         PRODUCT_NAME: OpenCodeChatActivityExtension
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         CODE_SIGN_STYLE: Automatic
         SKIP_INSTALL: YES
+        CODE_SIGN_ENTITLEMENTS: OpenCodeChatActivityExtension/OpenCodeChatActivityExtension.entitlements
   OpenCodeMacClient:
     type: application
     platform: macOS
@@ -91,13 +123,14 @@ targets:
       - path: OpenCodeIOSClient
         excludes:
           - OpenCodeIOSClientApp.swift
+      - path: OpenCodeShared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.opencode-client.macos
+        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.openclient.macos
         PRODUCT_NAME: OpenCodeMacClient
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_FILE: OpenCodeIOSClient/Info.plist
-        INFOPLIST_KEY_CFBundleDisplayName: OpenCode
+        INFOPLIST_KEY_CFBundleDisplayName: OpenClient
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
@@ -109,6 +142,7 @@ targets:
   OpenCodeIOSClientTests:
     type: bundle.unit-test
     platform: iOS
+    supportedDestinations: [iOS]
     deploymentTarget: "17.0"
     hostApplication: OpenCodeIOSClient
     sources:
@@ -118,11 +152,16 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.opencode-client.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.openclient.tests
+        PRODUCT_NAME: OpenCodeIOSClientTests
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         CODE_SIGN_STYLE: Automatic
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/OpenClient.app/OpenClient"
+        BUNDLE_LOADER: "$(TEST_HOST)"
   OpenCodeIOSClientUITests:
     type: bundle.ui-testing
     platform: iOS
+    supportedDestinations: [iOS]
     deploymentTarget: "17.0"
     sources:
       - path: OpenCodeIOSClientUITests
@@ -131,7 +170,9 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.opencode-client.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.openclient.uitests
+        PRODUCT_NAME: OpenCodeIOSClientUITests
+        SUPPORTED_PLATFORMS: iphoneos iphonesimulator
         CODE_SIGN_STYLE: Automatic
   OpenCodeMacClientTests:
     type: bundle.unit-test
@@ -144,5 +185,5 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.opencode-client.macos.tests
+        PRODUCT_BUNDLE_IDENTIFIER: com.ntoporcov.openclient.macos.tests
         CODE_SIGN_STYLE: Automatic

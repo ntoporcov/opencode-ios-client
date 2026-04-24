@@ -54,6 +54,11 @@ struct ChatView: View {
     @State private var shouldFollowComposerAffordanceChange = false
     @State private var affordanceScrollTask: Task<Void, Never>?
     @State private var needsInitialComposerHeightSnap = true
+    @State private var contentRevealTask: Task<Void, Never>?
+    @State private var isChatContentVisible = false
+    @State private var loadingIndicatorTask: Task<Void, Never>?
+    @State private var shouldShowLoadingIndicator = false
+    @State private var chatContentOffsetY: CGFloat = 14
 
     @State private var selectedInstructionTab: AppleIntelligenceInstructionTab = .user
 
@@ -115,8 +120,28 @@ struct ChatView: View {
         return abs(bottomAnchorFrame.minY - listViewportHeight) <= 140
     }
 
+    private var isLoadingSelectedSession: Bool {
+        viewModel.selectedSession?.id == sessionID && viewModel.directoryState.isLoadingSelectedSession && viewModel.messages.isEmpty
+    }
+
     private var effectiveBottomPadding: CGFloat {
         max(messageBottomPadding, composerOverlayHeight + 12) + (shouldAdjustForKeyboard ? keyboardHeight : 0)
+    }
+
+    private var shouldShowChatLoadingOverlay: Bool {
+        isLoadingSelectedSession || !isChatContentVisible
+    }
+
+    private var chatLoadingOverlay: some View {
+        VStack {
+            if shouldShowLoadingIndicator {
+                ProgressView()
+                    .controlSize(.regular)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .background(OpenCodePlatformColor.groupedBackground)
+        .allowsHitTesting(false)
     }
 
     var body: some View {
@@ -188,6 +213,15 @@ struct ChatView: View {
                     .opencodeInteractiveKeyboardDismiss()
                     .background(OpenCodePlatformColor.groupedBackground)
                     .accessibilityIdentifier("chat.scroll")
+                    .opacity(isChatContentVisible ? 1 : 0)
+                    .offset(y: chatContentOffsetY)
+                    .overlay {
+                        if shouldShowChatLoadingOverlay {
+                            chatLoadingOverlay
+                        }
+                    }
+                    .animation(.easeOut(duration: 0.18), value: isChatContentVisible)
+                    .animation(.easeOut(duration: 0.18), value: chatContentOffsetY)
                     .transaction { transaction in
                         transaction.animation = nil
                     }
@@ -196,10 +230,14 @@ struct ChatView: View {
                         needsInitialBottomSnap = true
                         needsInitialComposerHeightSnap = true
                         hasCompletedInitialHydrationSnap = false
+                        isChatContentVisible = false
+                        chatContentOffsetY = 14
+                        shouldShowLoadingIndicator = false
                         if !hasLoadedInitialWindow {
                             visibleMessageCount = min(viewModel.messages.count, messageWindowSize)
                             hasLoadedInitialWindow = true
                         }
+                        updateChatContentVisibility()
                         scheduleScrollToBottom(with: proxy)
                     }
                     .onChange(of: bottomAnchorFrame) { _, frame in
@@ -254,6 +292,7 @@ struct ChatView: View {
                         if count > 0, !hasCompletedInitialHydrationSnap {
                             hasCompletedInitialHydrationSnap = true
                             scheduleScrollToBottom(with: proxy, delayMS: 120)
+                            scheduleChatContentReveal(delayMS: 180)
                         }
 
                         if count > oldCount, outgoingBubbleText != nil {
@@ -266,10 +305,15 @@ struct ChatView: View {
                             shouldSnapOnNextMessage = false
                             scheduleScrollToBottom(with: proxy)
                         }
+
+                        updateChatContentVisibility()
                     }
                     .onChange(of: streamingFollowSignature) { _, _ in
                         guard hasLoadedInitialWindow, isNearBottom else { return }
                         scheduleScrollToBottom(with: proxy)
+                    }
+                    .onChange(of: isLoadingSelectedSession) { _, _ in
+                        updateChatContentVisibility()
                     }
                     .onPreferenceChange(ChatBottomAnchorFramePreferenceKey.self) { frame in
                         bottomAnchorFrame = frame
@@ -296,6 +340,8 @@ struct ChatView: View {
             viewModel.activeChatSessionID = sessionID
         }
         .onDisappear {
+            contentRevealTask?.cancel()
+            loadingIndicatorTask?.cancel()
             if viewModel.activeChatSessionID == sessionID {
                 viewModel.activeChatSessionID = nil
             }
@@ -578,6 +624,62 @@ struct ChatView: View {
         }
     }
 
+    private func updateChatContentVisibility() {
+        if isLoadingSelectedSession {
+            contentRevealTask?.cancel()
+            isChatContentVisible = false
+            chatContentOffsetY = 14
+            scheduleLoadingIndicatorReveal()
+            return
+        }
+
+        if viewModel.messages.isEmpty {
+            contentRevealTask?.cancel()
+            loadingIndicatorTask?.cancel()
+            shouldShowLoadingIndicator = false
+            isChatContentVisible = true
+            chatContentOffsetY = 0
+            return
+        }
+
+        guard hasCompletedInitialHydrationSnap else {
+            loadingIndicatorTask?.cancel()
+            shouldShowLoadingIndicator = false
+            isChatContentVisible = false
+            chatContentOffsetY = 14
+            return
+        }
+
+        scheduleChatContentReveal(delayMS: 120)
+    }
+
+    private func scheduleChatContentReveal(delayMS: Int) {
+        guard !isLoadingSelectedSession else { return }
+        contentRevealTask?.cancel()
+        loadingIndicatorTask?.cancel()
+        shouldShowLoadingIndicator = false
+        contentRevealTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(delayMS))
+            guard !Task.isCancelled, !isLoadingSelectedSession else { return }
+            withAnimation(.easeOut(duration: 0.18)) {
+                isChatContentVisible = true
+                chatContentOffsetY = 0
+            }
+        }
+    }
+
+    private func scheduleLoadingIndicatorReveal() {
+        loadingIndicatorTask?.cancel()
+        shouldShowLoadingIndicator = false
+        loadingIndicatorTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled, isLoadingSelectedSession, !isChatContentVisible else { return }
+            withAnimation(.easeOut(duration: 0.15)) {
+                shouldShowLoadingIndicator = true
+            }
+        }
+    }
+
     private func startOutgoingBubbleAnimationAndSend() {
         let draftText = viewModel.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasAttachments = !viewModel.draftAttachments.isEmpty
@@ -849,6 +951,42 @@ private struct AppleIntelligenceInstructionsSheet: View {
         case .system:
             return $systemInstructions
         }
+    }
+}
+
+private struct ChatSkeletonRow: View {
+    let isLeading: Bool
+
+    var body: some View {
+        HStack {
+            if isLeading {
+                bubble
+                Spacer(minLength: 36)
+            } else {
+                Spacer(minLength: 36)
+                bubble
+            }
+        }
+    }
+
+    private var bubble: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.9))
+                .frame(width: isLeading ? 180 : 150, height: 12)
+
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.9))
+                .frame(width: isLeading ? 220 : 190, height: 12)
+
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.7))
+                .frame(width: isLeading ? 140 : 110, height: 12)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(OpenCodePlatformColor.secondaryGroupedBackground.opacity(0.6), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .redacted(reason: .placeholder)
     }
 }
 
