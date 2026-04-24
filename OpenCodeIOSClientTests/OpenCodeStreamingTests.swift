@@ -135,13 +135,13 @@ final class OpenCodeStreamingTests: XCTestCase {
         let streamed = OpenCodeMessageEnvelope(
             info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
             parts: [
-                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: "Hello world")
+                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello world")
             ]
         )
         let canonical = OpenCodeMessageEnvelope(
             info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
             parts: [
-                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: "")
+                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "")
             ]
         )
 
@@ -154,13 +154,13 @@ final class OpenCodeStreamingTests: XCTestCase {
         let streamed = OpenCodeMessageEnvelope(
             info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
             parts: [
-                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: "Hello")
+                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello")
             ]
         )
         let canonical = OpenCodeMessageEnvelope(
             info: OpenCodeMessage(id: "msg_assistant", role: "assistant", sessionID: "ses_test", time: nil, agent: nil, model: nil),
             parts: [
-                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", reason: nil, tool: nil, callID: nil, state: nil, text: "Hello world")
+                OpenCodePart(id: "prt_text", messageID: "msg_assistant", sessionID: "ses_test", type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: "Hello world")
             ]
         )
 
@@ -173,6 +173,7 @@ final class OpenCodeStreamingTests: XCTestCase {
         let existingSession = OpenCodeSession(
             id: "ses_test",
             title: "Original",
+            workspaceID: nil,
             directory: "/tmp/project",
             projectID: "proj_1",
             parentID: nil
@@ -180,6 +181,7 @@ final class OpenCodeStreamingTests: XCTestCase {
         let partialUpdate = OpenCodeSession(
             id: "ses_test",
             title: "Renamed",
+            workspaceID: nil,
             directory: nil,
             projectID: nil,
             parentID: nil
@@ -202,6 +204,77 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(state.sessions.first?.title, "Renamed")
         XCTAssertEqual(state.sessions.first?.directory, "/tmp/project")
         XCTAssertEqual(state.selectedSession?.directory, "/tmp/project")
+    }
+
+    func testQuestionAskedDecodesWithUpstreamOptionalDefaults() throws {
+        let payload = try decodeEvent(
+            #"{"type":"question.asked","properties":{"id":"q_1","sessionID":"ses_test","questions":[{"question":"Choose","header":"Question","options":[{"label":"Build","description":"Build it"}]}]}}"#
+        )
+
+        guard case let .questionAsked(request) = try XCTUnwrap(OpenCodeTypedEvent(envelope: payload)) else {
+            return XCTFail("Expected questionAsked typed event")
+        }
+
+        XCTAssertEqual(request.id, "q_1")
+        XCTAssertEqual(request.sessionID, "ses_test")
+        XCTAssertEqual(request.questions.count, 1)
+        XCTAssertFalse(request.questions[0].multiple)
+        XCTAssertEqual(request.questions[0].custom, true)
+    }
+
+    func testQuestionAskedReducerStoresQuestionWhenOptionalFieldsOmitted() throws {
+        let payload = try decodeEvent(
+            #"{"type":"question.asked","properties":{"id":"q_1","sessionID":"ses_test","questions":[{"question":"Choose","header":"Question","options":[{"label":"Build","description":"Build it"}]}]}}"#
+        )
+
+        guard let typed = OpenCodeTypedEvent(envelope: payload) else {
+            return XCTFail("Expected questionAsked typed event")
+        }
+
+        var state = OpenCodeDirectoryState(
+            sessions: [],
+            selectedSession: OpenCodeSession(id: "ses_test", title: "Test", workspaceID: nil, directory: "/tmp/project", projectID: nil, parentID: nil),
+            messages: [],
+            commands: [],
+            sessionStatuses: [:],
+            todos: [],
+            permissions: [],
+            questions: []
+        )
+
+        let result = OpenCodeStateReducer.applyDirectoryEvent(event: typed, state: &state)
+
+        guard case .questionChanged = result else {
+            return XCTFail("Expected questionChanged, got \(result)")
+        }
+        XCTAssertEqual(state.questions.map(\.id), ["q_1"])
+    }
+
+    func testManagedEventDecodeReportsDroppedQuestionPayloads() {
+        let result = OpenCodeEventManager.decodeManagedEvent(
+            from: #"{"directory":"/tmp/project","type":"question.asked","properties":{"id":"q_1","sessionID":"ses_test"}}"#
+        )
+
+        guard case let .dropped(message) = result else {
+            return XCTFail("Expected dropped result")
+        }
+        XCTAssertEqual(message, "drop event: untyped question.asked dir=/tmp/project")
+    }
+
+    func testManagedEventDecodeBuildsQuestionEventForValidPayload() {
+        let result = OpenCodeEventManager.decodeManagedEvent(
+            from: #"{"directory":"/tmp/project","type":"question.asked","properties":{"id":"q_1","sessionID":"ses_test","questions":[{"question":"Choose","header":"Question","options":[{"label":"Build","description":"Build it"}]}]}}"#
+        )
+
+        guard case let .event(managed) = result else {
+            return XCTFail("Expected managed event")
+        }
+        XCTAssertEqual(managed.directory, "/tmp/project")
+        XCTAssertEqual(managed.envelope.type, "question.asked")
+        guard case let .questionAsked(question) = managed.typed else {
+            return XCTFail("Expected questionAsked typed event")
+        }
+        XCTAssertEqual(question.id, "q_1")
     }
 
     private func decodeEvent(_ json: String) throws -> OpenCodeEventEnvelope {

@@ -16,6 +16,10 @@ struct SessionRow: View {
         viewModel.sessionStatuses[session.id] == "busy"
     }
 
+    private var hasLiveActivity: Bool {
+        viewModel.isLiveActivityActive(for: session)
+    }
+
     var body: some View {
         Group {
             switch style {
@@ -35,6 +39,7 @@ struct SessionRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .animation(opencodeSelectionAnimation, value: isBusy)
+        .animation(opencodeSelectionAnimation, value: hasLiveActivity)
         .animation(opencodeSelectionAnimation, value: viewModel.hasPermissionRequest(for: session))
         .animation(opencodeSelectionAnimation, value: viewModel.sessionPreviews[session.id]?.text ?? "")
     }
@@ -72,10 +77,20 @@ struct SessionRow: View {
             HStack(alignment: .top) {
                 Spacer(minLength: 0)
 
-                if isBusy {
-                    Circle()
-                        .fill(Color.blue)
-                        .frame(width: 8, height: 8)
+                HStack(spacing: 6) {
+                    if isBusy {
+                        Circle()
+                            .fill(Color.blue)
+                            .frame(width: 8, height: 8)
+                    }
+
+                    if hasLiveActivity {
+                        badgeIcon(systemName: "waveform", foreground: .indigo, background: Color.indigo.opacity(0.12))
+                    }
+
+                    if viewModel.hasPermissionRequest(for: session) {
+                        badgeIcon(systemName: "hand.raised.fill", foreground: .orange, background: Color.orange.opacity(0.12))
+                    }
                 }
             }
 
@@ -88,14 +103,6 @@ struct SessionRow: View {
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
-
-            if viewModel.hasPermissionRequest(for: session) {
-                Label("Needs approval", systemImage: "hand.raised.fill")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.orange)
-                    .lineLimit(1)
-                    .frame(maxWidth: .infinity)
-            }
         }
     }
 
@@ -112,15 +119,23 @@ struct SessionRow: View {
                     .frame(width: 8, height: 8)
             }
 
+            if hasLiveActivity {
+                badgeIcon(systemName: "waveform", foreground: .indigo, background: Color.indigo.opacity(0.12))
+            }
+
             if viewModel.hasPermissionRequest(for: session) {
-                Label("Needs approval", systemImage: "hand.raised.fill")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.orange)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.orange.opacity(0.12), in: Capsule())
+                badgeIcon(systemName: "hand.raised.fill", foreground: .orange, background: Color.orange.opacity(0.12))
             }
         }
+    }
+
+    private func badgeIcon(systemName: String, foreground: Color, background: Color) -> some View {
+        Image(systemName: systemName)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 5)
+            .background(background, in: Capsule())
     }
 
     private var rowBackground: Color {

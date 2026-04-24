@@ -6,57 +6,98 @@ struct OpenCodeManagedEvent: Sendable {
     let typed: OpenCodeTypedEvent
 }
 
+enum OpenCodeManagedEventDecodeResult: Sendable {
+    case event(OpenCodeManagedEvent)
+    case dropped(String)
+}
+
+@MainActor
 final class OpenCodeEventManager {
     private var task: Task<Void, Never>?
+
+    nonisolated static func decodeManagedEvent(from rawData: String) -> OpenCodeManagedEventDecodeResult {
+        guard let data = rawData.data(using: .utf8) else {
+            return .dropped("drop event: non-utf8 payload")
+        }
+
+        guard let global = try? JSONDecoder().decode(OpenCodeGlobalEventEnvelope.self, from: data) else {
+            return .dropped("drop event: invalid global envelope \(String(rawData.prefix(160)))")
+        }
+
+        guard let envelope = global.event else {
+            return .dropped("drop event: missing inner envelope dir=\(global.directory ?? "global")")
+        }
+
+        guard let typed = OpenCodeTypedEvent(envelope: envelope) else {
+            return .dropped("drop event: untyped \(envelope.type) dir=\(global.directory ?? "global")")
+        }
+
+        return .event(
+            OpenCodeManagedEvent(
+                directory: global.directory ?? "global",
+                envelope: envelope,
+                typed: typed
+            )
+        )
+    }
 
     func start(
         client: OpenCodeAPIClient,
         onStatus: @escaping @Sendable (String) async -> Void,
         onRawLine: (@Sendable (String) async -> Void)? = nil,
+        onDroppedEvent: (@Sendable (String) async -> Void)? = nil,
         onEvent: @escaping @Sendable (OpenCodeManagedEvent) async -> Void
     ) {
         stop()
-        task = Task.detached(priority: .background) {
-            while !Task.isCancelled {
-                guard let url = client.globalEventURL() else {
-                    await onStatus("stream invalid url")
-                    return
-                }
-
-                await OpenCodeEventStream.consume(
-                    client: client,
-                    url: url,
-                    onStatus: onStatus,
-                    onRawLine: onRawLine,
-                    onEvent: { event in
-                        guard let data = event.data.data(using: .utf8),
-                              let global = try? JSONDecoder().decode(OpenCodeGlobalEventEnvelope.self, from: data),
-                              let envelope = global.event,
-                              let typed = OpenCodeTypedEvent(envelope: envelope) else {
-                            return
-                        }
-
-                        await onEvent(
-                            OpenCodeManagedEvent(
-                                directory: global.directory ?? "global",
-                                envelope: envelope,
-                                typed: typed
-                            )
-                        )
-                    }
-                )
-
-                if Task.isCancelled {
-                    return
-                }
-
-                try? await Task.sleep(for: .milliseconds(250))
-            }
+        task = Task {
+            await Self.runStreamLoop(
+                client: client,
+                onStatus: onStatus,
+                onRawLine: onRawLine,
+                onDroppedEvent: onDroppedEvent,
+                onEvent: onEvent
+            )
         }
     }
 
     func stop() {
         task?.cancel()
         task = nil
+    }
+
+    nonisolated private static func runStreamLoop(
+        client: OpenCodeAPIClient,
+        onStatus: @escaping @Sendable (String) async -> Void,
+        onRawLine: (@Sendable (String) async -> Void)? = nil,
+        onDroppedEvent: (@Sendable (String) async -> Void)? = nil,
+        onEvent: @escaping @Sendable (OpenCodeManagedEvent) async -> Void
+    ) async {
+        while !Task.isCancelled {
+            guard let url = client.globalEventURL() else {
+                await onStatus("stream invalid url")
+                return
+            }
+
+            await OpenCodeEventStream.consume(
+                client: client,
+                url: url,
+                onStatus: onStatus,
+                onRawLine: onRawLine,
+                onEvent: { event in
+                    switch Self.decodeManagedEvent(from: event.data) {
+                    case let .event(managed):
+                        await onEvent(managed)
+                    case let .dropped(message):
+                        await onDroppedEvent?(message)
+                    }
+                }
+            )
+
+            if Task.isCancelled {
+                return
+            }
+
+            try? await Task.sleep(for: .milliseconds(250))
+        }
     }
 }

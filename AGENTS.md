@@ -132,6 +132,10 @@ Important corrections discovered during implementation:
   - `question.asked`
   - `question.replied`
   - `question.rejected`
+- Upstream question payloads can omit defaultable fields:
+  - `multiple` may be missing and should default to `false`
+  - `custom` may be missing and should default to `true`
+- Question live-event decoding is easy to break if the generic event envelope model does not carry question-specific fields like `questions`
 
 ### Streaming
 
@@ -143,6 +147,40 @@ Important streaming findings:
 - iOS client keeps two practical guards on top:
   - create placeholder assistant message if deltas arrive before shell objects exist
   - preserve text when later empty `part.updated` would otherwise wipe it
+- Typed-event decode failures used to fail silently at the SSE boundary; the event manager now logs dropped events into the existing debug log.
+
+### Typed Event Decode Failures
+
+When a live SSE event is visible in raw payloads but does not update UI state, suspect typed-event decode mismatch before suspecting view logic.
+
+Common symptoms:
+
+- `permission.asked` works in-chat but `question.asked` does not
+- bootstrap hydration via `GET /question` works, but live question UI never appears
+- debug logs show raw events arriving, but no corresponding `question changed` reducer log
+- the stream appears healthy, but the only new clue is a `drop event: untyped ...` debug line
+
+How to identify it:
+
+1. Compare the live SSE payload shape with `OpenCodeEventProperties` and the target typed model in `OpenCodeIOSClient/Models/OpenCodeModels.swift`.
+2. Check upstream generated SDK types in `~/opencode/packages/sdk/js/src/v2/gen/types.gen.ts` for optional vs required fields.
+3. Look for asymmetry between similar event types.
+   Example: `permission.asked` had tolerant parsing while `question.asked` originally required a strict decode.
+4. Use the debug probe log and look for lines like:
+   - `drop event: untyped question.asked dir=/tmp/project`
+   - `drop event: invalid global envelope ...`
+   - `drop event: missing inner envelope dir=...`
+
+How to fix it:
+
+1. Ensure `OpenCodeEventProperties` includes the event-specific fields needed to reconstruct the typed payload.
+   Example: `question.asked` needs `questions`.
+2. Match upstream optional/default semantics in Swift models.
+   Example: `OpenCodeQuestion.multiple` should default to `false`, and `custom` should default to `true` when omitted.
+3. Prefer tolerant decoding for event payloads that the server or upstream may evolve.
+4. Add regression tests for both:
+   - a valid payload with omitted optional/defaultable fields
+   - an invalid/incomplete payload that should surface as a dropped-event debug message rather than fail silently
 
 ## Current iOS Structure
 

@@ -1,4 +1,5 @@
 import ActivityKit
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -6,6 +7,13 @@ struct OpenCodeChatActivityWidget: Widget {
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: OpenCodeChatActivityAttributes.self) { context in
             OpenCodeChatActivityView(context: context)
+                .widgetURL(
+                    OpenCodeChatActivityDeepLink.openAppURL(
+                        sessionID: context.attributes.sessionID,
+                        directory: context.attributes.directory,
+                        workspaceID: context.attributes.workspaceID
+                    )
+                )
                 .activityBackgroundTint(.clear)
                 .activitySystemActionForegroundColor(.white)
         } dynamicIsland: { context in
@@ -42,7 +50,13 @@ struct OpenCodeChatActivityWidget: Widget {
             } minimal: {
                 Image(systemName: "bubble.left.fill")
             }
-            .widgetURL(OpenCodeChatActivityDeepLink.openAppURL(sessionID: context.attributes.sessionID))
+            .widgetURL(
+                OpenCodeChatActivityDeepLink.openAppURL(
+                    sessionID: context.attributes.sessionID,
+                    directory: context.attributes.directory,
+                    workspaceID: context.attributes.workspaceID
+                )
+            )
             .keylineTint(statusColor(for: context.state.status))
         }
     }
@@ -78,20 +92,13 @@ private struct OpenCodeChatActivityView: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .fill(cardBackground)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 24, style: .continuous)
-                        .strokeBorder(.white.opacity(0.12), lineWidth: 1)
-                }
-
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .center, spacing: 12) {
-                    OpenCodeChatActivityAvatar(title: context.attributes.sessionTitle, size: 42)
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center, spacing: 10) {
+                    OpenCodeChatActivityAvatar(title: context.attributes.sessionTitle, size: 38)
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(context.attributes.sessionTitle)
-                            .font(.headline.weight(.semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
 
@@ -103,17 +110,17 @@ private struct OpenCodeChatActivityView: View {
                     Spacer(minLength: 0)
 
                     Text(context.state.status)
-                        .font(.caption.weight(.semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(statusColor)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
                         .background(statusColor.opacity(0.22), in: Capsule())
                 }
 
                 primaryContent
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 18)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 8)
@@ -121,29 +128,15 @@ private struct OpenCodeChatActivityView: View {
 
     private var statusColor: Color {
         switch context.state.status.lowercased() {
-        case "working":
+        case "action":
+            return .orange
+        case "live":
             return .green
         case "ready":
             return .blue
         default:
             return .white
         }
-    }
-
-    private var cardBackground: some ShapeStyle {
-        LinearGradient(
-            colors: [
-                gradientColors.0.opacity(0.38),
-                Color.black.opacity(0.92),
-                gradientColors.1.opacity(0.32)
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-    }
-
-    private var gradientColors: (Color, Color) {
-        palette(for: context.attributes.sessionTitle)
     }
 
     @ViewBuilder
@@ -207,24 +200,18 @@ private struct OpenCodeChatActivityActions: View {
         if context.state.pendingInteractionKind == "permission",
            let requestID = context.state.interactionID {
             HStack(spacing: 8) {
-                actionLink(
+                let allowIntent = permissionIntent(requestID: requestID, reply: "allow")
+                actionButton(
                     title: "Allow Once",
-                    destination: OpenCodeChatActivityDeepLink.permissionURL(
-                        sessionID: context.attributes.sessionID,
-                        requestID: requestID,
-                        reply: "allow"
-                    ),
+                    intent: allowIntent,
                     tint: .green
                 )
                 .frame(maxWidth: .infinity)
 
-                actionLink(
+                let denyIntent = permissionIntent(requestID: requestID, reply: "deny")
+                actionButton(
                     title: "Deny",
-                    destination: OpenCodeChatActivityDeepLink.permissionURL(
-                        sessionID: context.attributes.sessionID,
-                        requestID: requestID,
-                        reply: "deny"
-                    ),
+                    intent: denyIntent,
                     tint: .red
                 )
                 .frame(maxWidth: .infinity)
@@ -234,13 +221,10 @@ private struct OpenCodeChatActivityActions: View {
                   context.state.canReplyToQuestionInline {
             HStack(spacing: 8) {
                 ForEach(context.state.questionOptionLabels, id: \.self) { option in
-                    actionLink(
+                    let replyIntent = questionIntent(requestID: requestID, answer: option)
+                    actionButton(
                         title: option,
-                        destination: OpenCodeChatActivityDeepLink.questionURL(
-                            sessionID: context.attributes.sessionID,
-                            requestID: requestID,
-                            answer: option
-                        ),
+                        intent: replyIntent,
                         tint: .blue
                     )
                     .frame(maxWidth: .infinity)
@@ -249,7 +233,11 @@ private struct OpenCodeChatActivityActions: View {
         } else if context.state.pendingInteractionKind == "question" {
             actionLink(
                 title: "Open App",
-                destination: OpenCodeChatActivityDeepLink.openAppURL(sessionID: context.attributes.sessionID),
+                destination: OpenCodeChatActivityDeepLink.openAppURL(
+                    sessionID: context.attributes.sessionID,
+                    directory: context.attributes.directory,
+                    workspaceID: context.attributes.workspaceID
+                ),
                 tint: .white.opacity(0.16)
             )
         }
@@ -271,6 +259,46 @@ private struct OpenCodeChatActivityActions: View {
                 .buttonStyle(.plain)
             }
         }
+    }
+
+    private func actionButton<IntentType: AppIntent>(title: String, intent: IntentType, tint: Color) -> some View {
+        Button(intent: intent) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .frame(maxWidth: .infinity)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(tint, in: Capsule())
+                .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func permissionIntent(requestID: String, reply: String) -> OpenCodeReplyPermissionIntent {
+        var intent = OpenCodeReplyPermissionIntent()
+        intent.sessionID = context.attributes.sessionID
+        intent.requestID = requestID
+        intent.reply = reply
+        intent.baseURL = context.attributes.serverBaseURL
+        intent.username = context.attributes.serverUsername
+        intent.password = context.attributes.serverPassword
+        intent.directory = context.attributes.directory
+        intent.workspaceID = context.attributes.workspaceID
+        return intent
+    }
+
+    private func questionIntent(requestID: String, answer: String) -> OpenCodeReplyQuestionIntent {
+        var intent = OpenCodeReplyQuestionIntent()
+        intent.sessionID = context.attributes.sessionID
+        intent.requestID = requestID
+        intent.answer = answer
+        intent.baseURL = context.attributes.serverBaseURL
+        intent.username = context.attributes.serverUsername
+        intent.password = context.attributes.serverPassword
+        intent.directory = context.attributes.directory
+        intent.workspaceID = context.attributes.workspaceID
+        return intent
     }
 }
 
@@ -311,7 +339,6 @@ private struct OpenCodeChatActivityAvatar: View {
 }
 
 private func palette(for title: String) -> (Color, Color) {
-    let hash = abs(title.hashValue)
     let palettes: [(Color, Color)] = [
         (.blue, .purple),
         (.pink, .orange),
@@ -320,5 +347,6 @@ private func palette(for title: String) -> (Color, Color) {
         (.orange, .red),
         (.green, .teal),
     ]
-    return palettes[hash % palettes.count]
+    let paletteIndex = Int(opencodeStableHash(title) % UInt64(palettes.count))
+    return palettes[paletteIndex]
 }

@@ -55,7 +55,7 @@ struct QuestionPanel: View {
                                 }
                             }
 
-                            if question.custom == true {
+                            if question.custom != false {
                                 TextField("Type your answer", text: Binding(
                                     get: { customAnswers[key, default: ""] },
                                     set: { customAnswers[key] = $0 }

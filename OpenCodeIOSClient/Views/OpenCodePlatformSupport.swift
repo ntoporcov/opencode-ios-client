@@ -39,6 +39,31 @@ enum OpenCodeClipboard {
     }
 }
 
+enum OpenCodeHaptics {
+    enum ImpactStyle {
+        case crisp
+        case soft
+        case strong
+    }
+
+    @MainActor
+    static func impact(_ style: ImpactStyle) {
+#if canImport(UIKit)
+        let generator: UIImpactFeedbackGenerator
+        switch style {
+        case .crisp:
+            generator = UIImpactFeedbackGenerator(style: .rigid)
+        case .soft:
+            generator = UIImpactFeedbackGenerator(style: .soft)
+        case .strong:
+            generator = UIImpactFeedbackGenerator(style: .heavy)
+        }
+        generator.prepare()
+        generator.impactOccurred()
+#endif
+    }
+}
+
 extension View {
     @ViewBuilder
     func opencodeInlineNavigationTitle() -> some View {

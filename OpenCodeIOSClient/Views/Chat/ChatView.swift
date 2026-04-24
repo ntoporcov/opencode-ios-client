@@ -292,6 +292,14 @@ struct ChatView: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .navigationTitle(isChildSession ? childSessionTitle : (liveSession.title ?? "Session"))
         .opencodeInlineNavigationTitle()
+        .onAppear {
+            viewModel.activeChatSessionID = sessionID
+        }
+        .onDisappear {
+            if viewModel.activeChatSessionID == sessionID {
+                viewModel.activeChatSessionID = nil
+            }
+        }
         .toolbar { chatToolbar }
 #if DEBUG
         .sheet(isPresented: $viewModel.isShowingDebugProbe) {
@@ -575,6 +583,8 @@ struct ChatView: View {
         let hasAttachments = !viewModel.draftAttachments.isEmpty
 
         guard !draftText.isEmpty || hasAttachments else { return }
+
+        OpenCodeHaptics.impact(.strong)
 
         shouldSnapOnNextMessage = true
         immediateScrollToken += 1

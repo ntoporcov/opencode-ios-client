@@ -660,6 +660,48 @@ struct OpenCodeQuestion: Codable, Hashable, Sendable {
     let options: [OpenCodeQuestionOption]
     let multiple: Bool
     let custom: Bool?
+
+    init(question: String, header: String, options: [OpenCodeQuestionOption], multiple: Bool = false, custom: Bool? = true) {
+        self.question = question
+        self.header = header
+        self.options = options
+        self.multiple = multiple
+        self.custom = custom
+    }
+
+    init(from decoder: Decoder) throws {
+        enum CodingKeys: String, CodingKey {
+            case question
+            case header
+            case options
+            case multiple
+            case custom
+        }
+
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        question = try container.decode(String.self, forKey: .question)
+        header = try container.decode(String.self, forKey: .header)
+        options = try container.decode([OpenCodeQuestionOption].self, forKey: .options)
+        multiple = try container.decodeIfPresent(Bool.self, forKey: .multiple) ?? false
+        custom = try container.decodeIfPresent(Bool.self, forKey: .custom) ?? true
+    }
+
+    func encode(to encoder: Encoder) throws {
+        enum CodingKeys: String, CodingKey {
+            case question
+            case header
+            case options
+            case multiple
+            case custom
+        }
+
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(question, forKey: .question)
+        try container.encode(header, forKey: .header)
+        try container.encode(options, forKey: .options)
+        try container.encode(multiple, forKey: .multiple)
+        try container.encodeIfPresent(custom, forKey: .custom)
+    }
 }
 
 struct OpenCodeQuestionOption: Codable, Hashable, Identifiable, Sendable {
@@ -948,11 +990,11 @@ enum OpenCodeTypedEvent: Sendable {
             self = .questionAsked(question)
         case "question.replied":
             guard let sessionID = envelope.properties.sessionID,
-                  let requestID = envelope.properties.id else { return nil }
+                  let requestID = envelope.properties.requestID ?? envelope.properties.id else { return nil }
             self = .questionReplied(sessionID: sessionID, requestID: requestID)
         case "question.rejected":
             guard let sessionID = envelope.properties.sessionID,
-                  let requestID = envelope.properties.id else { return nil }
+                  let requestID = envelope.properties.requestID ?? envelope.properties.id else { return nil }
             self = .questionRejected(sessionID: sessionID, requestID: requestID)
         case "vcs.branch.updated":
             self = .vcsBranchUpdated(branch: envelope.properties.branch)
@@ -985,6 +1027,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
     let callID: String?
     let title: String?
     let metadata: [String: OpenCodeJSONValue]?
+    let questions: [OpenCodeQuestion]?
     let requestID: String?
     let permissionID: String?
     let response: String?
@@ -1014,6 +1057,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
         callID: String? = nil,
         title: String? = nil,
         metadata: [String: OpenCodeJSONValue]? = nil,
+        questions: [OpenCodeQuestion]? = nil,
         requestID: String? = nil,
         permissionID: String? = nil,
         response: String? = nil,
@@ -1042,6 +1086,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
         self.callID = callID
         self.title = title
         self.metadata = metadata
+        self.questions = questions
         self.requestID = requestID
         self.permissionID = permissionID
         self.response = response
@@ -1072,6 +1117,7 @@ struct OpenCodeEventProperties: Codable, Sendable {
         case callID
         case title
         case metadata
+        case questions
         case requestID
         case permissionID
         case response

@@ -36,6 +36,14 @@ extension AppViewModel {
         ].joined(separator: "|")
     }
 
+    var currentProjectPreferenceScopeKey: String {
+        currentPinScopeKey
+    }
+
+    var isLiveActivityAutoStartEnabled: Bool {
+        liveActivityAutoStartByScope[currentProjectPreferenceScopeKey] ?? false
+    }
+
     func presentProjectPicker() {
         withAnimation(opencodeSelectionAnimation) {
             isShowingProjectPicker = true
@@ -413,6 +421,14 @@ extension AppViewModel {
         return decoded
     }
 
+    func loadLiveActivityAutoStartByScope() -> [String: Bool] {
+        guard let data = UserDefaults.standard.data(forKey: StorageKey.liveActivityAutoStartByScope),
+              let decoded = try? JSONDecoder().decode([String: Bool].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+
     func persistSessionPreviews() {
         guard let data = try? JSONEncoder().encode(sessionPreviews) else { return }
         UserDefaults.standard.set(data, forKey: StorageKey.sessionPreviews)
@@ -421,6 +437,11 @@ extension AppViewModel {
     func persistPinnedSessionIDsByScope() {
         guard let data = try? JSONEncoder().encode(pinnedSessionIDsByScope) else { return }
         UserDefaults.standard.set(data, forKey: StorageKey.pinnedSessionsByScope)
+    }
+
+    func persistLiveActivityAutoStartByScope() {
+        guard let data = try? JSONEncoder().encode(liveActivityAutoStartByScope) else { return }
+        UserDefaults.standard.set(data, forKey: StorageKey.liveActivityAutoStartByScope)
     }
 
     func setSessionPreview(_ preview: SessionPreview, for sessionID: String) {
@@ -498,6 +519,18 @@ extension AppViewModel {
         }
 
         persistPinnedSessionIDsByScope()
+    }
+
+    func setLiveActivityAutoStartEnabled(_ isEnabled: Bool, for scopeKey: String? = nil) {
+        let key = scopeKey ?? currentProjectPreferenceScopeKey
+
+        if isEnabled {
+            liveActivityAutoStartByScope[key] = true
+        } else {
+            liveActivityAutoStartByScope[key] = nil
+        }
+
+        persistLiveActivityAutoStartByScope()
     }
 
     func refreshSessionPreview(for sessionID: String, messages: [OpenCodeMessageEnvelope]) {

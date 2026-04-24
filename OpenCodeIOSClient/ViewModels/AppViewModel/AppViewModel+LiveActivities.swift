@@ -8,19 +8,22 @@ extension AppViewModel {
     private static let liveActivityGracePeriod: TimeInterval = 180
 
     func toggleLiveActivity(for session: OpenCodeSession) async {
-        if activeLiveActivitySessionID == session.id {
-            await stopLiveActivity(immediate: true)
+        if activeLiveActivitySessionIDs.contains(session.id) {
+            await stopLiveActivity(for: session.id, immediate: true)
         } else {
             await startLiveActivity(for: session)
         }
     }
 
-    func startLiveActivity(for session: OpenCodeSession) async {
+    func startLiveActivity(for session: OpenCodeSession, userVisibleErrors: Bool = true) async {
         #if canImport(ActivityKit) && os(iOS)
         do {
             let state = liveActivityState(for: session)
             let sessionID = session.id
             let sessionTitle = liveActivitySessionTitle(for: session)
+            let configSnapshot = config
+            let sessionDirectory = session.directory
+            let workspaceID = session.workspaceID
 
             try await Task.detached(priority: .userInitiated) {
                 if let existing = Activity<OpenCodeChatActivityAttributes>.activities.first(where: { $0.attributes.sessionID == sessionID }) {
@@ -28,33 +31,46 @@ extension AppViewModel {
                     return
                 }
 
-                if let existing = Activity<OpenCodeChatActivityAttributes>.activities.first {
-                    await existing.end(nil, dismissalPolicy: .immediate)
-                }
-
                 _ = try Activity.request(
-                    attributes: OpenCodeChatActivityAttributes(sessionID: sessionID, sessionTitle: sessionTitle),
+                    attributes: OpenCodeChatActivityAttributes(
+                        sessionID: sessionID,
+                        sessionTitle: sessionTitle,
+                        serverBaseURL: configSnapshot.baseURL,
+                        serverUsername: configSnapshot.username,
+                        serverPassword: configSnapshot.password,
+                        directory: sessionDirectory,
+                        workspaceID: workspaceID
+                    ),
                     content: ActivityContent(state: state, staleDate: nil),
                     pushType: nil
                 )
             }.value
-            activeLiveActivitySessionID = session.id
-            errorMessage = nil
+            activeLiveActivitySessionIDs.insert(session.id)
+            if userVisibleErrors {
+                errorMessage = nil
+            }
         } catch {
-            errorMessage = error.localizedDescription
+            if userVisibleErrors {
+                errorMessage = error.localizedDescription
+            }
         }
         #endif
     }
 
-    func stopLiveActivity(immediate: Bool = false) async {
-        #if canImport(ActivityKit) && os(iOS)
-        guard let sessionID = activeLiveActivitySessionID,
-              let session = session(matching: sessionID) ?? sessions.first(where: { $0.id == sessionID }) ?? selectedSession else {
-            activeLiveActivitySessionID = nil
-            return
-        }
+    func maybeAutoStartLiveActivity(for session: OpenCodeSession) async {
+        guard !isUsingAppleIntelligence, isLiveActivityAutoStartEnabled else { return }
+        guard !activeLiveActivitySessionIDs.contains(session.id) else { return }
+        await startLiveActivity(for: session, userVisibleErrors: false)
+    }
 
-        let state = liveActivityState(for: session)
+    func stopLiveActivity(for session: OpenCodeSession, immediate: Bool = false) async {
+        await stopLiveActivity(for: session.id, immediate: immediate)
+    }
+
+    func stopLiveActivity(for sessionID: String, immediate: Bool = false) async {
+        #if canImport(ActivityKit) && os(iOS)
+        let session = session(matching: sessionID) ?? sessions.first(where: { $0.id == sessionID }) ?? (selectedSession?.id == sessionID ? selectedSession : nil)
+        let finalState = session.map { liveActivityState(for: $0) }
         let gracePeriod = immediate ? nil : Self.liveActivityGracePeriod
         await Task.detached(priority: .userInitiated) {
             guard let activity = Activity<OpenCodeChatActivityAttributes>.activities.first(where: { $0.attributes.sessionID == sessionID }) else { return }
@@ -62,37 +78,47 @@ extension AppViewModel {
                 guard let gracePeriod else { return .immediate }
                 return .after(Date().addingTimeInterval(gracePeriod))
             }()
-            await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: dismissalPolicy)
+            await activity.end(ActivityContent(state: finalState ?? activity.content.state, staleDate: nil), dismissalPolicy: dismissalPolicy)
         }.value
-        activeLiveActivitySessionID = nil
+        activeLiveActivitySessionIDs.remove(sessionID)
         #endif
     }
 
     func refreshLiveActivityIfNeeded(for sessionID: String? = nil, endIfIdle: Bool = false) {
         #if canImport(ActivityKit) && os(iOS)
-        guard let activeSessionID = activeLiveActivitySessionID else { return }
-        guard sessionID == nil || sessionID == activeSessionID else { return }
-        guard let session = session(matching: activeSessionID) ?? sessions.first(where: { $0.id == activeSessionID }) ?? selectedSession else { return }
-
         Task { @MainActor [weak self] in
             guard let self else { return }
-            let state = self.liveActivityState(for: session)
-            if endIfIdle && self.directoryState.sessionStatuses[activeSessionID] == "idle" {
-                await Task.detached(priority: .utility) {
-                    guard let activity = Activity<OpenCodeChatActivityAttributes>.activities.first(where: { $0.attributes.sessionID == activeSessionID }) else { return }
-                    await activity.end(
-                        ActivityContent(state: state, staleDate: nil),
-                        dismissalPolicy: .after(Date().addingTimeInterval(Self.liveActivityGracePeriod))
-                    )
-                }.value
-                self.activeLiveActivitySessionID = nil
-                return
+            let targetSessionIDs: [String]
+            if let sessionID {
+                guard self.activeLiveActivitySessionIDs.contains(sessionID) else { return }
+                targetSessionIDs = [sessionID]
+            } else {
+                targetSessionIDs = Array(self.activeLiveActivitySessionIDs)
             }
 
-            await Task.detached(priority: .utility) {
-                guard let activity = Activity<OpenCodeChatActivityAttributes>.activities.first(where: { $0.attributes.sessionID == activeSessionID }) else { return }
-                await activity.update(ActivityContent(state: state, staleDate: nil))
-            }.value
+            for targetSessionID in targetSessionIDs {
+                guard let session = self.session(matching: targetSessionID) ?? self.sessions.first(where: { $0.id == targetSessionID }) ?? (self.selectedSession?.id == targetSessionID ? self.selectedSession : nil) else {
+                    continue
+                }
+
+                let state = self.liveActivityState(for: session)
+                if endIfIdle && self.directoryState.sessionStatuses[targetSessionID] == "idle" {
+                    await Task.detached(priority: .utility) {
+                        guard let activity = Activity<OpenCodeChatActivityAttributes>.activities.first(where: { $0.attributes.sessionID == targetSessionID }) else { return }
+                        await activity.end(
+                            ActivityContent(state: state, staleDate: nil),
+                            dismissalPolicy: .after(Date().addingTimeInterval(Self.liveActivityGracePeriod))
+                        )
+                    }.value
+                    self.activeLiveActivitySessionIDs.remove(targetSessionID)
+                    continue
+                }
+
+                await Task.detached(priority: .utility) {
+                    guard let activity = Activity<OpenCodeChatActivityAttributes>.activities.first(where: { $0.attributes.sessionID == targetSessionID }) else { return }
+                    await activity.update(ActivityContent(state: state, staleDate: nil))
+                }.value
+            }
         }
         #endif
     }
@@ -110,6 +136,11 @@ extension AppViewModel {
         let components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let queryItems = components?.queryItems ?? []
         let action = queryItems.first(where: { $0.name == "action" })?.value
+        let directory = queryItems.first(where: { $0.name == "directory" })?.value
+
+        if !isUsingAppleIntelligence, effectiveSelectedDirectory != directory {
+            await selectDirectory(directory)
+        }
 
         await openSession(sessionID: sessionID)
 
@@ -136,17 +167,18 @@ extension AppViewModel {
     }
 
     func isLiveActivityActive(for session: OpenCodeSession) -> Bool {
-        activeLiveActivitySessionID == session.id
+        activeLiveActivitySessionIDs.contains(session.id)
     }
 
     private func liveActivityState(for session: OpenCodeSession) -> OpenCodeChatActivityAttributes.ContentState {
         let pendingPermission = permissions(for: session.id).first
         let pendingQuestion = questions(for: session.id).first
         let latestSnippet = liveActivityLatestSnippet(for: session)
+        let status = liveActivityStatusText(for: session, hasPendingInteraction: pendingPermission != nil || pendingQuestion != nil)
 
         if let pendingPermission {
             return OpenCodeChatActivityAttributes.ContentState(
-                status: liveActivityStatusText(for: session),
+                status: status,
                 latestSnippet: latestSnippet,
                 updatedAt: .now,
                 pendingInteractionKind: "permission",
@@ -167,7 +199,7 @@ extension AppViewModel {
                 optionLabels.count == firstQuestion.options.count
 
             return OpenCodeChatActivityAttributes.ContentState(
-                status: liveActivityStatusText(for: session),
+                status: status,
                 latestSnippet: latestSnippet,
                 updatedAt: .now,
                 pendingInteractionKind: "question",
@@ -180,7 +212,7 @@ extension AppViewModel {
         }
 
         return OpenCodeChatActivityAttributes.ContentState(
-            status: liveActivityStatusText(for: session),
+            status: status,
             latestSnippet: latestSnippet,
             updatedAt: .now,
             pendingInteractionKind: nil,
@@ -197,14 +229,18 @@ extension AppViewModel {
         return title.isEmpty ? "Session" : title
     }
 
-    private func liveActivityStatusText(for session: OpenCodeSession) -> String {
+    private func liveActivityStatusText(for session: OpenCodeSession, hasPendingInteraction: Bool) -> String {
+        if hasPendingInteraction {
+            return "Action"
+        }
+
         switch directoryState.sessionStatuses[session.id] {
         case "busy":
-            return "Working"
+            return "Live"
         case "idle":
             return "Ready"
         default:
-            return "Watching"
+            return "Live"
         }
     }
 

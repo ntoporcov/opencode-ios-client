@@ -244,6 +244,7 @@ struct MessageComposer: View {
 
     private var collapsedAccessoryButton: some View {
         Button {
+            OpenCodeHaptics.impact(.soft)
             withAnimation(opencodeSelectionAnimation) {
                 isAccessoryMenuOpen = true
             }

@@ -20,7 +20,6 @@ struct SessionAvatar: View {
     }
 
     private var avatarGradient: LinearGradient {
-        let hash = abs(title.hashValue)
         let palettes: [(Color, Color)] = [
             (.blue, .purple),
             (.pink, .orange),
@@ -29,7 +28,8 @@ struct SessionAvatar: View {
             (.orange, .red),
             (.green, .teal),
         ]
-        let palette = palettes[hash % palettes.count]
+        let paletteIndex = Int(opencodeStableHash(title) % UInt64(palettes.count))
+        let palette = palettes[paletteIndex]
         return LinearGradient(colors: [palette.0, palette.1], startPoint: .topLeading, endPoint: .bottomTrailing)
     }
 }

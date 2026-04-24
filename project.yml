@@ -73,6 +73,8 @@ targets:
       path: OpenCodeChatActivityExtension/Info.plist
       properties:
         CFBundleDisplayName: OpenCode Live
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

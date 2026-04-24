@@ -40,6 +40,11 @@ extension AppViewModel {
                 }
             },
             onRawLine: nil,
+            onDroppedEvent: { [weak self] message in
+                await MainActor.run {
+                    self?.appendDebugLog(message)
+                }
+            },
             onEvent: { [weak self] managed in
                 await MainActor.run {
                     self?.appendDebugLog("event \(managed.envelope.type): \(managed.directory)")
@@ -141,10 +146,15 @@ extension AppViewModel {
         let payload = managed.envelope
         let selectedSession = directoryState.selectedSession
 
+        var nextDirectoryState = directoryState
         let result = OpenCodeStateReducer.applyDirectoryEvent(
             event: managed.typed,
-            state: &directoryState
+            state: &nextDirectoryState
         )
+
+        if nextDirectoryState != directoryState {
+            directoryState = nextDirectoryState
+        }
 
         switch result {
         case let .message(reason):
@@ -180,6 +190,8 @@ extension AppViewModel {
                 appendDebugLog("step finish")
                 stopFallbackRefresh()
             }
+
+            triggerStreamPartHapticIfNeeded(for: managed)
         case .sessionChanged:
             appendDebugLog("session changed")
         case .todoChanged:
@@ -203,9 +215,9 @@ extension AppViewModel {
         switch managed.typed {
         case let .sessionDeleted(session):
             removeSessionPreview(for: session.id)
-            if activeLiveActivitySessionID == session.id {
+            if activeLiveActivitySessionIDs.contains(session.id) {
                 Task { [weak self] in
-                    await self?.stopLiveActivity(immediate: true)
+                    await self?.stopLiveActivity(for: session.id, immediate: true)
                 }
             }
         case let .vcsBranchUpdated(branch):
@@ -226,23 +238,18 @@ extension AppViewModel {
             }
         }
 
-        if payload.type == "question.asked" {
-            Task { [weak self] in
-                guard let self else { return }
-                if let session = self.selectedSession {
-                    await self.loadAllQuestions(for: session)
-                } else {
-                    await self.loadAllQuestions(directory: self.effectiveSelectedDirectory)
-                }
-            }
-        }
-
-        let shouldEndLiveActivity = if case .idle = result { true } else { false }
-        refreshLiveActivityIfNeeded(for: managedEventSessionID(for: managed), endIfIdle: shouldEndLiveActivity)
+        refreshLiveActivityIfNeeded(for: managedEventSessionID(for: managed))
     }
 
     private func shouldApplyDirectoryEvent(from managed: OpenCodeManagedEvent) -> Bool {
         let eventDirectory = managed.directory
+        let eventSessionID = managedEventSessionID(for: managed)
+
+        if let selectedSessionID = selectedSession?.id,
+           eventSessionID == selectedSessionID {
+            return true
+        }
+
         let acceptedDirectories = [selectedSession?.directory, effectiveSelectedDirectory]
             .compactMap { directory -> String? in
                 guard let directory, !directory.isEmpty else { return nil }
@@ -259,7 +266,7 @@ extension AppViewModel {
 
         guard eventDirectory == "global" else { return false }
 
-        return managedEventSessionID(for: managed) != nil
+        return eventSessionID != nil
     }
 
     private func managedEventSessionID(for managed: OpenCodeManagedEvent) -> String? {
@@ -281,6 +288,55 @@ extension AppViewModel {
         default:
             return nil
         }
+    }
+
+    private func triggerStreamPartHapticIfNeeded(for managed: OpenCodeManagedEvent) {
+        guard shouldEmitStreamPartHaptic(for: managed) else { return }
+
+        let now = Date()
+        guard now >= nextStreamPartHapticAllowedAt else { return }
+
+        OpenCodeHaptics.impact(.crisp)
+        nextStreamPartHapticAllowedAt = now.addingTimeInterval(nextStreamPartHapticInterval())
+    }
+
+    private func shouldEmitStreamPartHaptic(for managed: OpenCodeManagedEvent) -> Bool {
+        guard let selectedSession else { return false }
+        guard activeChatSessionID == selectedSession.id else { return false }
+
+        switch managed.typed {
+        case let .messagePartDelta(sessionID, messageID, partID, field, delta):
+            guard sessionID == selectedSession.id,
+                  field == "text",
+                  !delta.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return false
+            }
+            return isVisibleAssistantTextPart(messageID: messageID, partID: partID, sessionID: sessionID)
+        default:
+            return false
+        }
+    }
+
+    private func isVisibleAssistantTextPart(messageID: String, partID: String, sessionID: String) -> Bool {
+        guard let message = directoryState.messages.first(where: {
+            $0.id == messageID &&
+            $0.info.sessionID == sessionID &&
+            ($0.info.role ?? "").lowercased() == "assistant"
+        }) else {
+            return false
+        }
+
+        return message.parts.contains { part in
+            part.id == partID && part.type == "text"
+        }
+    }
+
+    private func nextStreamPartHapticInterval() -> TimeInterval {
+        if Double.random(in: 0 ... 1) < 0.18 {
+            return Double.random(in: 0.12 ... 0.18)
+        }
+
+        return Double.random(in: 0.045 ... 0.085)
     }
 
     private func eventScopeSummary(for managed: OpenCodeManagedEvent) -> String {

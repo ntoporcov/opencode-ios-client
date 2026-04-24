@@ -8,6 +8,7 @@ final class AppViewModelTests: XCTestCase {
         let session = OpenCodeSession(
             id: "ses_test",
             title: "Test",
+            workspaceID: nil,
             directory: "/tmp/session-dir",
             projectID: "proj_test",
             parentID: nil
@@ -31,6 +32,7 @@ final class AppViewModelTests: XCTestCase {
         let session = OpenCodeSession(
             id: "ses_test",
             title: "Global",
+            workspaceID: nil,
             directory: "/tmp/session-dir",
             projectID: "global",
             parentID: nil
@@ -54,6 +56,7 @@ final class AppViewModelTests: XCTestCase {
         let selectedSession = OpenCodeSession(
             id: "ses_selected",
             title: "Selected",
+            workspaceID: nil,
             directory: "/tmp/project",
             projectID: "proj_test",
             parentID: nil
@@ -114,6 +117,7 @@ final class AppViewModelTests: XCTestCase {
         let selectedSession = OpenCodeSession(
             id: "ses_selected",
             title: "Selected",
+            workspaceID: nil,
             directory: "/tmp/project",
             projectID: "proj_test",
             parentID: nil
@@ -172,6 +176,7 @@ final class AppViewModelTests: XCTestCase {
         let selectedSession = OpenCodeSession(
             id: "ses_selected",
             title: "Selected",
+            workspaceID: nil,
             directory: "/tmp/project",
             projectID: "proj_test",
             parentID: nil

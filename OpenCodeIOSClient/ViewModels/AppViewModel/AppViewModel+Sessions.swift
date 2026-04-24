@@ -133,6 +133,7 @@ extension AppViewModel {
             }
             try await loadMessages(for: session)
             seedComposerSelectionsForNewSession(session)
+            await maybeAutoStartLiveActivity(for: session)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -161,6 +162,7 @@ extension AppViewModel {
             async let permissions: Void = loadAllPermissions(for: session)
             async let questions: Void = loadAllQuestions(for: session)
             _ = try await (messages, statuses, permissions, questions)
+            await maybeAutoStartLiveActivity(for: session)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -227,6 +229,8 @@ extension AppViewModel {
         let previousStatus = directoryState.sessionStatuses[selectedSession.id]
         directoryState.sessionStatuses[selectedSession.id] = "busy"
         defer { isLoading = false }
+
+        await maybeAutoStartLiveActivity(for: selectedSession)
 
         do {
             try await client.sendCommand(
@@ -340,6 +344,8 @@ extension AppViewModel {
         let previousStatus = directoryState.sessionStatuses[selectedSession.id]
         directoryState.sessionStatuses[selectedSession.id] = "busy"
         defer { isLoading = false }
+
+        await maybeAutoStartLiveActivity(for: selectedSession)
 
         do {
             try await client.sendMessageAsync(

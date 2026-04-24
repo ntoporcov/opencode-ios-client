@@ -25,22 +25,21 @@ struct MarkdownMessageText: View {
             markdown: text,
             options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         ) {
-            Text(attributed)
-                .font(textFont)
-                .foregroundStyle(textForegroundStyle)
-                .lineSpacing(textLineSpacing)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+            styledText(Text(attributed))
         } else {
-            Text(text)
-                .font(textFont)
-                .foregroundStyle(textForegroundStyle)
-                .lineSpacing(textLineSpacing)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .textSelection(.enabled)
+            styledText(Text(text))
         }
+    }
+
+    private func styledText(_ text: Text) -> some View {
+        text
+            .font(textFont)
+            .foregroundStyle(textForegroundStyle)
+            .lineSpacing(textLineSpacing)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: isUser ? nil : .infinity, alignment: .leading)
+            .textSelection(.enabled)
     }
 
     private var textFont: Font {

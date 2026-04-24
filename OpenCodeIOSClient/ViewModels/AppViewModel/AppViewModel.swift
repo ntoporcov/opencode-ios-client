@@ -28,6 +28,7 @@ final class AppViewModel: ObservableObject {
         static let appleIntelligenceWorkspaces = "appleIntelligenceWorkspaces"
         static let sessionPreviews = "sessionPreviews"
         static let pinnedSessionsByScope = "pinnedSessionsByScope"
+        static let liveActivityAutoStartByScope = "liveActivityAutoStartByScope"
     }
 
     @Published var config = OpenCodeServerConfig()
@@ -52,6 +53,7 @@ final class AppViewModel: ObservableObject {
     @Published var toolMessageDetails: [String: OpenCodeMessageEnvelope] = [:]
     @Published var sessionPreviews: [String: SessionPreview] = [:]
     @Published var pinnedSessionIDsByScope: [String: [String]] = [:]
+    @Published var liveActivityAutoStartByScope: [String: Bool] = [:]
     @Published var draftTitle = ""
     @Published var draftMessage = ""
     @Published var draftAttachments: [OpenCodeComposerAttachment] = []
@@ -83,7 +85,8 @@ final class AppViewModel: ObservableObject {
     @Published var selectedModelsBySessionID: [String: OpenCodeModelReference] = [:]
     @Published var selectedVariantsBySessionID: [String: String] = [:]
     @Published var newSessionDefaults = NewSessionDefaults()
-    @Published var activeLiveActivitySessionID: String?
+    @Published var activeLiveActivitySessionIDs: Set<String> = []
+    @Published var activeChatSessionID: String?
 
     let eventManager = OpenCodeEventManager()
     var eventStreamRestartTask: Task<Void, Never>?
@@ -102,6 +105,7 @@ final class AppViewModel: ObservableObject {
     var liveRefreshGeneration = 0
     var lastFallbackMessageCount = 0
     var lastFallbackAssistantLength = 0
+    var nextStreamPartHapticAllowedAt = Date.distantPast
 
     let debugProbePrompt = "Write four short paragraphs about why responsive streaming matters in mobile AI apps. Make each paragraph 2-3 sentences."
     let defaultSearchRoot = NSHomeDirectory()
@@ -116,6 +120,7 @@ final class AppViewModel: ObservableObject {
         appleIntelligenceSystemInstructions = defaultAppleIntelligenceSystemInstructions
         sessionPreviews = loadSessionPreviews()
         pinnedSessionIDsByScope = loadPinnedSessionIDsByScope()
+        liveActivityAutoStartByScope = loadLiveActivityAutoStartByScope()
         if let savedConfig = recentConfigs.first {
             recentServerConfigs = recentConfigs
             config = savedConfig

@@ -24,6 +24,12 @@ struct ProjectContentView: View {
         .navigationTitle(projectTitle)
         .opencodeInlineNavigationTitle()
         .toolbar {
+            if viewModel.selectedProjectContentTab == .sessions {
+                ToolbarItem(placement: .opencodeTrailing) {
+                    SessionLiveActivityMenu(viewModel: viewModel)
+                }
+            }
+
             ToolbarItem(placement: .opencodeTrailing) {
                 Button(action: toolbarAction) {
                     Image(systemName: toolbarIcon)
