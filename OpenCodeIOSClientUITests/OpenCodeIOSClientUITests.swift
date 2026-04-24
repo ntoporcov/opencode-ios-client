@@ -1,13 +1,51 @@
 import XCTest
 
 final class OpenCodeIOSClientUITests: XCTestCase {
-    private let baseURL = URL(string: "http://127.0.0.1:4096")!
-    private let username = "opencode"
-    private let password = ""
-    private let projectDirectory = ProcessInfo.processInfo.environment["OPENCODE_UI_TEST_DIRECTORY"] ?? "/tmp/opencode-ios-client"
+    private let environment = ProcessInfo.processInfo.environment
+
+    private var baseURL: URL {
+        URL(string: environment["SNAPSHOT_OPENCODE_BASE_URL"] ?? environment["OPENCODE_UI_TEST_BASE_URL"] ?? "http://127.0.0.1:4096")!
+    }
+
+    private var username: String {
+        environment["SNAPSHOT_OPENCODE_USERNAME"] ?? environment["OPENCODE_UI_TEST_USERNAME"] ?? "opencode"
+    }
+
+    private var password: String {
+        environment["SNAPSHOT_OPENCODE_PASSWORD"] ?? environment["OPENCODE_UI_TEST_PASSWORD"] ?? ""
+    }
+
+    private var projectDirectory: String {
+        environment["SNAPSHOT_OPENCODE_DIRECTORY"] ?? environment["OPENCODE_UI_TEST_DIRECTORY"] ?? "/tmp/opencode-ios-client"
+    }
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+    }
+
+    @MainActor
+    func testAppStoreScreenshots() {
+        let scenes: [(scene: String, screenshotName: String)] = [
+            ("connection", "01-connection"),
+            ("recent-servers", "02-recent-servers"),
+            ("projects", "03-projects"),
+            ("sessions", "04-sessions"),
+            ("chat", "05-chat"),
+            ("permission", "06-permission"),
+            ("question", "07-question"),
+        ]
+
+        for (scene, screenshotName) in scenes {
+            let app = XCUIApplication()
+            setupSnapshot(app)
+            app.launchEnvironment["OPENCLIENT_SCREENSHOT_SCENE"] = scene
+            app.launch()
+
+            let sceneMarker = app.staticTexts["screenshot.scene.\(scene)"]
+            XCTAssertTrue(sceneMarker.waitForExistence(timeout: 10), "Expected screenshot scene \(scene) to load")
+            snapshot(screenshotName)
+            app.terminate()
+        }
     }
 
     @MainActor

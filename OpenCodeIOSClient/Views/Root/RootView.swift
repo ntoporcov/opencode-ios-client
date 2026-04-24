@@ -38,6 +38,10 @@ struct RootView: View {
                         withAnimation(opencodeSelectionAnimation) {
                             preferredCompactColumn = .content
                         }
+                    } else {
+                        withAnimation(opencodeSelectionAnimation) {
+                            preferredCompactColumn = .detail
+                        }
                     }
                 }
                 .animation(opencodeSelectionAnimation, value: viewModel.selectedSession?.id)

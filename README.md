@@ -51,6 +51,18 @@ Regenerate the Xcode project:
 /Users/mininic/.local/bin/xcodegen generate
 ```
 
+Use a local ignored XcodeGen override file for signing on this machine:
+
+```bash
+cp project.local.example.yml project.local.yml
+```
+
+Then set your team in `project.local.yml` and generate with:
+
+```bash
+INCLUDE_PROJECT_LOCAL_YAML=1 /Users/mininic/.local/bin/xcodegen generate
+```
+
 Build for Simulator:
 
 ```bash
@@ -62,6 +74,113 @@ Open in Xcode:
 ```bash
 open OpenCodeIOSClient.xcodeproj
 ```
+
+## Screenshots
+
+Current seeded screenshot set:
+
+![OpenClient connection screen](fastlane/screenshots/en_US/iPhone-17-Pro-01-connection.png)
+
+![OpenClient recent servers](fastlane/screenshots/en_US/iPhone-17-Pro-02-recent-servers.png)
+
+![OpenClient sessions list](fastlane/screenshots/en_US/iPhone-17-Pro-04-sessions.png)
+
+![OpenClient chat view](fastlane/screenshots/en_US/iPhone-17-Pro-05-chat.png)
+
+![OpenClient question prompt](fastlane/screenshots/en_US/iPhone-17-Pro-07-question.png)
+
+## Fastlane
+
+Minimal fastlane release tooling is included in `fastlane/`.
+
+Available lanes:
+
+- `fastlane ios build`: simulator build sanity check
+- `fastlane ios archive`: local release archive build
+- `fastlane ios beta`: upload to TestFlight
+- `fastlane ios release`: upload to App Store Connect without auto-submitting
+- `fastlane ios metadata_check`: run `precheck`
+- `fastlane ios metadata`: upload App Store metadata from `fastlane/metadata`
+- `fastlane ios download_metadata`: pull current App Store metadata into `fastlane/metadata`
+- `fastlane ios screenshots`: capture App Store screenshots with deterministic UI tests
+
+Authentication uses an App Store Connect API key via environment variables.
+
+Copy the template and fill it locally:
+
+```bash
+cp fastlane/.env.default fastlane/.env
+```
+
+Required for TestFlight/App Store lanes:
+
+- `APP_STORE_CONNECT_API_KEY_ID`
+- `APP_STORE_CONNECT_ISSUER_ID`
+- one of:
+  - `APP_STORE_CONNECT_API_KEY_PATH`
+  - `APP_STORE_CONNECT_API_KEY_CONTENT`
+
+Example:
+
+```bash
+cp fastlane/.env.default fastlane/.env
+fastlane ios build
+fastlane ios beta
+```
+
+`fastlane/.env` is ignored by git.
+
+App Store listing text can live in-repo under `fastlane/metadata/en-US/` and be uploaded with:
+
+```bash
+fastlane ios metadata
+```
+
+If you want to skip screenshots while getting started:
+
+```bash
+FASTLANE_SKIP_SCREENSHOTS=1 fastlane ios metadata
+```
+
+Screenshot automation is driven by deterministic UI tests and a dedicated screenshot scheme.
+
+Current screenshot capture path:
+
+- `fastlane/Fastfile` `screenshots` lane
+- `OpenCodeIOSClientUITests.testAppStoreScreenshots()`
+- dedicated seeded launch scenes via `OPENCLIENT_SCREENSHOT_SCENE`
+- current capture devices:
+  - `iPhone 17 Pro`
+  - `iPhone 17 Pro Max`
+  - `iPad Pro 13-inch (M5)`
+
+Run it with:
+
+```bash
+fastlane ios screenshots
+```
+
+The screenshot flow no longer depends on a live backend. It launches deterministic in-app screenshot scenes for connection, recent servers, projects, sessions, chat, permission prompts, and question prompts.
+
+Generated PNGs land in:
+
+```bash
+fastlane/screenshots/en_US/
+```
+
+## Website
+
+A simple GitHub Pages site can live in this same repo under `docs/`.
+
+- homepage: `docs/index.html`
+- privacy policy: `docs/privacy/index.html`
+- publish notes: `docs/README.md`
+
+## Release
+
+For the concrete TestFlight/App Store deployment flow on this machine, see:
+
+- `RELEASE_RUNBOOK.md`
 
 ## Recommended next steps
 

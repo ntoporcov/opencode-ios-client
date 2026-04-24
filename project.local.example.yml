@@ -1,0 +1,11 @@
+settings:
+  base:
+    DEVELOPMENT_TEAM: "YOUR_TEAM_ID"
+
+# You can also override other machine-local signing values here if needed.
+# Example:
+# targets:
+#   OpenCodeIOSClient:
+#     settings:
+#       base:
+#         CODE_SIGN_STYLE: Automatic

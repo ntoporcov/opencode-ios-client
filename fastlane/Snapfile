@@ -1,0 +1,16 @@
+scheme("OpenCodeIOSClientScreenshots")
+output_directory("./screenshots")
+devices([
+  "iPhone 17 Pro",
+  "iPhone 17 Pro Max",
+  "iPad Pro 13-inch (M5)"
+])
+languages([
+  "en-US"
+])
+
+clear_previous_screenshots(true)
+erase_simulator(true)
+
+localize_simulator(false)
+override_status_bar(true)

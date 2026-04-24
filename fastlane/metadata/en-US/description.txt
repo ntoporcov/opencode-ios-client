@@ -1,0 +1,14 @@
+OpenClient is a native iPhone client for connecting to your own OpenCode server.
+
+Keep your coding sessions within reach when you are away from your desk. Browse projects, resume chats, answer permission and question prompts, and follow ongoing activity from a fast native interface built for iPhone.
+
+OpenClient includes:
+
+- Connect to your own self-hosted OpenCode server
+- Browse projects and sessions
+- Continue chats from a native mobile UI
+- Respond to permission and question prompts
+- Follow active work with Live Activities
+- Reconnect quickly to saved servers
+
+OpenClient is designed for private, self-hosted use. You choose which server it connects to, and your session data stays tied to your own OpenCode setup.

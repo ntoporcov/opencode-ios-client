@@ -15,7 +15,14 @@ struct SessionListView: View {
 
         List {
             Section {
-                if viewModel.pinnedRootSessions.isEmpty {
+                if viewModel.directoryState.isLoadingSessions && viewModel.sessions.isEmpty {
+                    ForEach(0 ..< 3, id: \.self) { _ in
+                        SessionRowSkeleton()
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
+                } else if viewModel.pinnedRootSessions.isEmpty {
                     EmptyPinnedDropArea { sessionID in
                         viewModel.insertPinnedSession(withID: sessionID, at: 0)
                     }
@@ -41,7 +48,14 @@ struct SessionListView: View {
             }
 
             Section {
-                if viewModel.unpinnedRootSessions.isEmpty {
+                if viewModel.directoryState.isLoadingSessions && viewModel.sessions.isEmpty {
+                    ForEach(0 ..< 6, id: \.self) { _ in
+                        SessionRowSkeleton()
+                            .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                    }
+                } else if viewModel.unpinnedRootSessions.isEmpty {
                     Text(viewModel.sessions.isEmpty ? "Create a session to start chatting." : "All visible sessions are pinned.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -118,11 +132,12 @@ struct SessionListView: View {
         .matchedGeometryEffect(id: session.id, in: sessionRowNamespace)
         .contentShape(Rectangle())
         .onTapGesture {
+            viewModel.prepareSessionSelection(session)
+            withAnimation(opencodeSelectionAnimation) {
+                onSessionChosen()
+            }
             Task {
                 await viewModel.selectSession(session)
-                withAnimation(opencodeSelectionAnimation) {
-                    onSessionChosen()
-                }
             }
         }
         .contextMenu {
@@ -192,6 +207,32 @@ struct SessionListView: View {
                 Label("Delete", systemImage: "trash")
             }
         }
+    }
+}
+
+private struct SessionRowSkeleton: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(OpenCodePlatformColor.secondaryGroupedBackground)
+                .frame(width: 40, height: 40)
+
+            VStack(alignment: .leading, spacing: 8) {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(OpenCodePlatformColor.secondaryGroupedBackground)
+                    .frame(width: 150, height: 14)
+
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(OpenCodePlatformColor.secondaryGroupedBackground)
+                    .frame(width: 100, height: 12)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .redacted(reason: .placeholder)
     }
 }
 

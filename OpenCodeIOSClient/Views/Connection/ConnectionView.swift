@@ -149,38 +149,75 @@ struct ConnectionView: View {
 
 private struct ServerConnectionSections: View {
     @ObservedObject var viewModel: AppViewModel
+    @State private var acknowledgesInsecureConnection = false
+
+    private var requiresInsecureConnectionAcknowledgment: Bool {
+        viewModel.config.usesInsecureHTTP
+    }
+
+    private var insecureConnectionMessage: String {
+        switch viewModel.config.insecureConnectionKind {
+        case .localNetwork:
+            return "`http://` connections are not protected by HTTPS/TLS. This is often acceptable for local, LAN, or Tailscale-based self-hosted setups, but it is still less secure than HTTPS."
+        case .nonLocal:
+            return "`http://` connections are not protected by HTTPS/TLS. For non-local hosts, your credentials and traffic are better protected when the server is configured with HTTPS."
+        case nil:
+            return ""
+        }
+    }
+
+    private var canConnect: Bool {
+        !viewModel.isLoading && (!requiresInsecureConnectionAcknowledgment || acknowledgesInsecureConnection)
+    }
 
     var body: some View {
-        Section("Server") {
-            TextField("Base URL", text: $viewModel.config.baseURL)
-                .opencodeDisableTextAutocapitalization()
-                .autocorrectionDisabled()
-                .opencodeURLKeyboardType()
-                .accessibilityIdentifier("connection.baseURL")
+        Group {
+            Section {
+                TextField("Base URL", text: $viewModel.config.baseURL)
+                    .opencodeDisableTextAutocapitalization()
+                    .autocorrectionDisabled()
+                    .opencodeURLKeyboardType()
+                    .accessibilityIdentifier("connection.baseURL")
 
-            TextField("Username", text: $viewModel.config.username)
-                .opencodeDisableTextAutocapitalization()
-                .autocorrectionDisabled()
-                .accessibilityIdentifier("connection.username")
+                TextField("Username", text: $viewModel.config.username)
+                    .opencodeDisableTextAutocapitalization()
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("connection.username")
 
-            SecureField("Password", text: $viewModel.config.password)
-                .accessibilityIdentifier("connection.password")
-        }
+                SecureField("Password", text: $viewModel.config.password)
+                    .accessibilityIdentifier("connection.password")
 
-        Section {
-            Button(viewModel.isLoading ? "Connecting..." : "Connect to OpenCode") {
-                Task { await viewModel.connect() }
+                if requiresInsecureConnectionAcknowledgment {
+                    Toggle("I understand this connection is insecure", isOn: $acknowledgesInsecureConnection)
+                        .toggleStyle(.switch)
+                        .accessibilityIdentifier("connection.insecureAck")
+                }
+            } header: {
+                Text("Server")
+            } footer: {
+                if requiresInsecureConnectionAcknowledgment {
+                    Text(insecureConnectionMessage)
+                }
             }
-            .frame(maxWidth: .infinity, alignment: .center)
-            .disabled(viewModel.isLoading)
-            .accessibilityIdentifier("connection.connect")
-        }
 
-        if let errorMessage = viewModel.errorMessage {
-            Section("Error") {
-                Text(errorMessage)
-                    .foregroundStyle(.red)
+            Section {
+                Button(viewModel.isLoading ? "Connecting..." : "Connect to OpenCode") {
+                    Task { await viewModel.connect() }
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .disabled(!canConnect)
+                .accessibilityIdentifier("connection.connect")
             }
+
+            if let errorMessage = viewModel.errorMessage {
+                Section("Error") {
+                    Text(errorMessage)
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .onChange(of: viewModel.config.trimmedBaseURL) { _, _ in
+            acknowledgesInsecureConnection = false
         }
     }
 }

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		01FBAE8B97CDAF7E35274C9F /* OpenCodeBootstrap.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E2827C65D681FB1F9FB24B7 /* OpenCodeBootstrap.swift */; };
+		032CFC26B2D9A3E945D1F635 /* OpenCodeServerPasswordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4AA5B93EFBA292AE8B56323 /* OpenCodeServerPasswordStore.swift */; };
 		03DCDDFD8CE860FAEAD89DB3 /* ThinkingRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04820AC7A37C8876C322AE1F /* ThinkingRow.swift */; };
 		078C8308CA3570CF09E87A62 /* GitStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 483F003FBB5C24B5B8B08C06 /* GitStatusView.swift */; };
 		0BC9ED1BEDCC1CD87C7C8CE7 /* NewSessionDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8994E8493B69E44F2907F0B /* NewSessionDefaults.swift */; };
@@ -31,6 +32,7 @@
 		2F75E03D122089D50A3902F2 /* AppViewModel+Connection.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFC0BC6B94598163839BEB51 /* AppViewModel+Connection.swift */; };
 		300D3F9E5CB278849683EB16 /* CreateProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A646955CA36C75DE45C03244 /* CreateProjectSheet.swift */; };
 		334F091EA2CEEB2A7340C18E /* ModelToolbarMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9330DFD0E36A44A30ADA81F4 /* ModelToolbarMenu.swift */; };
+		33D639D324CB7874C62439FF /* OpenCodeServerPasswordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4AA5B93EFBA292AE8B56323 /* OpenCodeServerPasswordStore.swift */; };
 		35F4201348FB82F0689166EB /* ReasoningBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67ED70E3B988B800EF2527FE /* ReasoningBlock.swift */; };
 		3781AB208B728108C5F33335 /* OpenCodeModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C2E4443213AED890D5731AD /* OpenCodeModels.swift */; };
 		3816A16B5010AD947F73652E /* ConnectionPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCCD275C8D3DA6880342860D /* ConnectionPreviews.swift */; };
@@ -73,6 +75,7 @@
 		6CD4DEE3C0B5286E0D723483 /* OpenCodeStateReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE226896BC39EE597FAFCD0 /* OpenCodeStateReducer.swift */; };
 		6E5ACD06E69539059E6D105C /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 336AA13CA174A57F5F0EB8E8 /* MessageComposer.swift */; };
 		70731237696C01D693E7A9F1 /* OpenCodeStableHash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A5B94B94132296B0A9AB18 /* OpenCodeStableHash.swift */; };
+		7149D59C3B14817F09F7F0E0 /* SnapshotHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = C126EA7240EC59D518E11FA2 /* SnapshotHelper.swift */; };
 		71E3BC763941CB2A6B6399C4 /* SessionLiveActivityMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E365D144D112480228AFE76 /* SessionLiveActivityMenu.swift */; };
 		73089DEC5B77318173F081E5 /* ChatDebugProbeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC61FC8D9D3F923A6C41F1AC /* ChatDebugProbeSheet.swift */; };
 		7565023DB628EFA04CE27909 /* PermissionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 462C06C5CAA57A2203DCAA3E /* PermissionCard.swift */; };
@@ -81,16 +84,19 @@
 		78216DA038E15E620A2E0DFE /* AppViewModel+VCS.swift in Sources */ = {isa = PBXBuildFile; fileRef = F44D3044D46925B3F7A5326B /* AppViewModel+VCS.swift */; };
 		7B13E182462CA311B2F1AC45 /* OpenCodeAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F548AE214A483AB9207C376D /* OpenCodeAPIClient.swift */; };
 		7B2BC4A43CDA11F3EF2F3388 /* PermissionActionStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E2AE7558998B1F31DA9AC3E /* PermissionActionStack.swift */; };
+		8255CCB5E68A9B5842A29995 /* AppViewModel+Screenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00C1F7850265F54ECFFEDD /* AppViewModel+Screenshots.swift */; };
 		829CCBF6A81A1C789BEF7D94 /* SessionRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 751BF1A887341EC96213F975 /* SessionRow.swift */; };
 		8346513141588D894B30B6FB /* GitDiffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A3CDF1A5CC5EBD38065F132 /* GitDiffView.swift */; };
 		8429493ED301FB3223F1EDE5 /* AppViewModel+Previews.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED5404BF2A53DB64EC9BB8AC /* AppViewModel+Previews.swift */; };
 		8485CB413C5F3E79DE0A4433 /* CreateSessionSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7C69B9DDEC02FCCFE6713CD /* CreateSessionSheet.swift */; };
+		84C94042495DA30716E6C982 /* ScreenshotSceneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE4DD43AEBE68274E4B039C /* ScreenshotSceneView.swift */; };
 		86B121E35C91FFE42FF1CDE9 /* AppViewModel+LiveActivities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 78FE4340F50DDD65323C9FAB /* AppViewModel+LiveActivities.swift */; };
 		86BDB319B3F9D405C52E1A03 /* AppViewModel+Sessions.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4B91D6745A8E634A21646B8 /* AppViewModel+Sessions.swift */; };
 		8705629CBF404A33F9F18000 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E879D651F7196549575BBF97 /* Assets.xcassets */; };
 		8945B563B3D2F9410A0056F8 /* AppViewModel+Projects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24200A73829BD02C29A419F2 /* AppViewModel+Projects.swift */; };
 		8971BD08662EE0D909BBD944 /* TodoStrip.swift in Sources */ = {isa = PBXBuildFile; fileRef = D501151F9A7C46AFEB896438 /* TodoStrip.swift */; };
 		8BD3A4FC63B674AB6724DA1C /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 336AA13CA174A57F5F0EB8E8 /* MessageComposer.swift */; };
+		9556984BB2C2F5AF9D93E252 /* OpenCodeSavedServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9332BE13C3462E02D1B1140 /* OpenCodeSavedServer.swift */; };
 		95A42DA19A9D8F38D73C64AA /* ActivityRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D173E5CA44E0FAA00024A7DC /* ActivityRow.swift */; };
 		98F51C8BD3AC5CB1093C2E14 /* OpenCodeLiveActivityActionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC220CA26635182C3304FB1D /* OpenCodeLiveActivityActionClient.swift */; };
 		9D59DD7F29E51765A59695F1 /* OpenCodeChatActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD22634739A584D72F8DFA45 /* OpenCodeChatActivityAttributes.swift */; };
@@ -98,20 +104,25 @@
 		A3DAF2FA3EE5B87FCE3169C6 /* PermissionActionStack.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1E2AE7558998B1F31DA9AC3E /* PermissionActionStack.swift */; };
 		A654E7248CB491A809333D2B /* MarkdownMessageText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E6A66E01CBC3ABAD5DB637E /* MarkdownMessageText.swift */; };
 		A6B5B539DE72F0CDADDB13C3 /* AppViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C863806B8786D01DC82EE9E /* AppViewModelTests.swift */; };
+		A9FD3644B48741E26BF23EF9 /* ScreenshotSceneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CE4DD43AEBE68274E4B039C /* ScreenshotSceneView.swift */; };
 		AF0C12B963DBDA1AC2401B00 /* OpenCodeAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F548AE214A483AB9207C376D /* OpenCodeAPIClient.swift */; };
 		AFCBBA57E0E892FFF916FD2F /* OpenCodeStateReducer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE226896BC39EE597FAFCD0 /* OpenCodeStateReducer.swift */; };
 		B1F560662D50742B915DC90E /* SessionsPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = CADEBD7A68A16A7E0ED46EE2 /* SessionsPreviews.swift */; };
+		B2608D2922DC434AFCAF03CC /* OpenCodeSavedServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9332BE13C3462E02D1B1140 /* OpenCodeSavedServer.swift */; };
 		B26FDEB79CB98BD9ED814807 /* ReasoningBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67ED70E3B988B800EF2527FE /* ReasoningBlock.swift */; };
+		B2BA826B286ECDBF80898054 /* OpenCodeLiveActivityActionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC220CA26635182C3304FB1D /* OpenCodeLiveActivityActionClient.swift */; };
 		B4886ACD51D0D4389A832A55 /* OpenCodeServerConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47DD58E8A5CEDA4251579066 /* OpenCodeServerConfig.swift */; };
 		B7E12BD83492DA96E87C8822 /* ChatGlassStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3B166D24C208B9DEA796C69 /* ChatGlassStyle.swift */; };
 		BA04F4DD96A0C39C2511402F /* OpenCodeStreamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41F2AB7FE622C4FDB3040763 /* OpenCodeStreamingTests.swift */; };
 		BA5ED6B3A311F0D083977D8B /* ProjectListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22123DE9C0CFED1D040013EC /* ProjectListView.swift */; };
 		BA9B9359B4B57BC1433A627A /* CreateProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A646955CA36C75DE45C03244 /* CreateProjectSheet.swift */; };
 		BB94AA4E6B73101B0416978C /* ProjectListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22123DE9C0CFED1D040013EC /* ProjectListView.swift */; };
+		BF2CC9979B5A906197DD8E0B /* OpenCodeChatActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD22634739A584D72F8DFA45 /* OpenCodeChatActivityAttributes.swift */; };
 		BF46C26DEF4B2706BAF1E6D1 /* SessionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5495928F452F10791C0614E4 /* SessionListView.swift */; };
 		BF9C50581431223AA4C85299 /* ChatPreviews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9403CD63018375C683CB8CB9 /* ChatPreviews.swift */; };
 		C7132E70603513B56BF2F17A /* MessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BC5EB9EFFE91C43D15E42DB /* MessageBubble.swift */; };
 		C7CA43007F7D03B653B97EB5 /* OpenCodeStableHash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A5B94B94132296B0A9AB18 /* OpenCodeStableHash.swift */; };
+		C97B32A827B47B9F6E355037 /* OpenCodeServerPasswordStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4AA5B93EFBA292AE8B56323 /* OpenCodeServerPasswordStore.swift */; };
 		CA0D8865E122625154105750 /* ChatDebugProbeSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC61FC8D9D3F923A6C41F1AC /* ChatDebugProbeSheet.swift */; };
 		CBE2BE0666DE8C2450380F77 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6CC62904B083C34CEC115F8 /* ChatView.swift */; };
 		CCECDD9AD6E18B8AC53F0AA2 /* DetailTextBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02C2EE024F2F7A8144C58C48 /* DetailTextBlock.swift */; };
@@ -126,6 +137,8 @@
 		D8C8928C7F8809FE9302BB19 /* AppViewModel+Events.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0EEA870477FC0FB20F10BA0 /* AppViewModel+Events.swift */; };
 		D980C38ADDBB9FF1127FFE04 /* SessionLiveActivityMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E365D144D112480228AFE76 /* SessionLiveActivityMenu.swift */; };
 		DB0CD5BD8F78FD3E579FB413 /* TodoCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8075AA645B1FFF1574EF2A95 /* TodoCard.swift */; };
+		DCD16278DD1E5C3C7967EE42 /* OpenCodeStableHash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A5B94B94132296B0A9AB18 /* OpenCodeStableHash.swift */; };
+		E0618F3F267957A90EC83E01 /* AppViewModel+Screenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00C1F7850265F54ECFFEDD /* AppViewModel+Screenshots.swift */; };
 		E1711616244122E08AA8F0FD /* AppViewModel+Projects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24200A73829BD02C29A419F2 /* AppViewModel+Projects.swift */; };
 		E1ABB6FF3613903938110686 /* TodoInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22332A66515C9C38EB202DC /* TodoInspectorView.swift */; };
 		E1F563E495CB9A257B481AD1 /* OpenCodeIdentifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF52B1C1E18074595B57A274 /* OpenCodeIdentifierTests.swift */; };
@@ -222,6 +235,7 @@
 		50694E000CB966DF38DDE41C /* SessionAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAvatar.swift; sourceTree = "<group>"; };
 		5098A1B36D1A31CC24A788C4 /* AppleIntelligenceIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleIntelligenceIntegrationTests.swift; sourceTree = "<group>"; };
 		5495928F452F10791C0614E4 /* SessionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionListView.swift; sourceTree = "<group>"; };
+		5BAC2BD4B4DBDAB0AFC40494 /* OpenCodeChatActivityExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenCodeChatActivityExtension.entitlements; sourceTree = "<group>"; };
 		638D31E01C9E7027BBEF7770 /* AgentToolbarMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentToolbarMenu.swift; sourceTree = "<group>"; };
 		67ED70E3B988B800EF2527FE /* ReasoningBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReasoningBlock.swift; sourceTree = "<group>"; };
 		69E5854030C50B37EBC3CD1C /* OpenCodeIOSClient.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = OpenCodeIOSClient.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -235,6 +249,8 @@
 		8075AA645B1FFF1574EF2A95 /* TodoCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodoCard.swift; sourceTree = "<group>"; };
 		81E24421CE08AEAB38EEC236 /* AppViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppViewModel.swift; sourceTree = "<group>"; };
 		841ABDC8F062F8727E983C0A /* OpenCodePlatformSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodePlatformSupport.swift; sourceTree = "<group>"; };
+		8A00C1F7850265F54ECFFEDD /* AppViewModel+Screenshots.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Screenshots.swift"; sourceTree = "<group>"; };
+		8CE4DD43AEBE68274E4B039C /* ScreenshotSceneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenshotSceneView.swift; sourceTree = "<group>"; };
 		8FE226896BC39EE597FAFCD0 /* OpenCodeStateReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeStateReducer.swift; sourceTree = "<group>"; };
 		9330DFD0E36A44A30ADA81F4 /* ModelToolbarMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelToolbarMenu.swift; sourceTree = "<group>"; };
 		9403CD63018375C683CB8CB9 /* ChatPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatPreviews.swift; sourceTree = "<group>"; };
@@ -250,8 +266,11 @@
 		AD22634739A584D72F8DFA45 /* OpenCodeChatActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeChatActivityAttributes.swift; sourceTree = "<group>"; };
 		BBB059EBF27890693F2A6FFD /* HelpPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpPreviews.swift; sourceTree = "<group>"; };
 		BCCD275C8D3DA6880342860D /* ConnectionPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionPreviews.swift; sourceTree = "<group>"; };
+		C08CAC08E3E7D095333DCE80 /* OpenCodeIOSClient.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = OpenCodeIOSClient.entitlements; sourceTree = "<group>"; };
+		C126EA7240EC59D518E11FA2 /* SnapshotHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SnapshotHelper.swift; sourceTree = "<group>"; };
 		C237D3E4A11603721D0A94BF /* OpenCodeChatActivityExtension.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = OpenCodeChatActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		C435A7F0986CD073C2DC3B28 /* OpenCodeIOSClientUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = OpenCodeIOSClientUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C4AA5B93EFBA292AE8B56323 /* OpenCodeServerPasswordStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeServerPasswordStore.swift; sourceTree = "<group>"; };
 		CADEBD7A68A16A7E0ED46EE2 /* SessionsPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsPreviews.swift; sourceTree = "<group>"; };
 		CFC0BC6B94598163839BEB51 /* AppViewModel+Connection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppViewModel+Connection.swift"; sourceTree = "<group>"; };
 		CFD078B7015EA38C5705FD47 /* ProjectsPreviews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsPreviews.swift; sourceTree = "<group>"; };
@@ -273,6 +292,7 @@
 		F65558E77D320FFE4AD71AD9 /* OpenCodeChatActivityExtensionBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeChatActivityExtensionBundle.swift; sourceTree = "<group>"; };
 		F6CC62904B083C34CEC115F8 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		F8A79AA851BF55A0816C9C92 /* OpenCodeMacClient.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenCodeMacClient.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F9332BE13C3462E02D1B1140 /* OpenCodeSavedServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeSavedServer.swift; sourceTree = "<group>"; };
 		FCA8E8783A279403F85973BA /* OpenCodeAPIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeAPIClientTests.swift; sourceTree = "<group>"; };
 		FF52B1C1E18074595B57A274 /* OpenCodeIdentifierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeIdentifierTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -292,6 +312,7 @@
 		1A10AAA227F6255AE66B5657 /* OpenCodeChatActivityExtension */ = {
 			isa = PBXGroup;
 			children = (
+				5BAC2BD4B4DBDAB0AFC40494 /* OpenCodeChatActivityExtension.entitlements */,
 				F65558E77D320FFE4AD71AD9 /* OpenCodeChatActivityExtensionBundle.swift */,
 				A8C971B49980524A841E5689 /* OpenCodeChatActivityIntents.swift */,
 				0E2FBCC54F88C6651FD7B06B /* OpenCodeChatActivityWidget.swift */,
@@ -364,6 +385,7 @@
 			children = (
 				AD22634739A584D72F8DFA45 /* OpenCodeChatActivityAttributes.swift */,
 				AC220CA26635182C3304FB1D /* OpenCodeLiveActivityActionClient.swift */,
+				C4AA5B93EFBA292AE8B56323 /* OpenCodeServerPasswordStore.swift */,
 				70A5B94B94132296B0A9AB18 /* OpenCodeStableHash.swift */,
 			);
 			path = OpenCodeShared;
@@ -379,6 +401,7 @@
 				78FE4340F50DDD65323C9FAB /* AppViewModel+LiveActivities.swift */,
 				ED5404BF2A53DB64EC9BB8AC /* AppViewModel+Previews.swift */,
 				24200A73829BD02C29A419F2 /* AppViewModel+Projects.swift */,
+				8A00C1F7850265F54ECFFEDD /* AppViewModel+Screenshots.swift */,
 				F4B91D6745A8E634A21646B8 /* AppViewModel+Sessions.swift */,
 				F44D3044D46925B3F7A5326B /* AppViewModel+VCS.swift */,
 			);
@@ -401,6 +424,7 @@
 			isa = PBXGroup;
 			children = (
 				1E35EBE15CA41A449B323317 /* OpenCodeIOSClientUITests.swift */,
+				C126EA7240EC59D518E11FA2 /* SnapshotHelper.swift */,
 			);
 			path = OpenCodeIOSClientUITests;
 			sourceTree = "<group>";
@@ -411,6 +435,7 @@
 				1CF3564009893D20694D105B /* ProjectContentView.swift */,
 				0BE7E13EEA52B67A4D5D7E93 /* RootPreviews.swift */,
 				48723322E87F93E488181C34 /* RootView.swift */,
+				8CE4DD43AEBE68274E4B039C /* ScreenshotSceneView.swift */,
 			);
 			path = Root;
 			sourceTree = "<group>";
@@ -420,6 +445,7 @@
 			children = (
 				A8994E8493B69E44F2907F0B /* NewSessionDefaults.swift */,
 				3C2E4443213AED890D5731AD /* OpenCodeModels.swift */,
+				F9332BE13C3462E02D1B1140 /* OpenCodeSavedServer.swift */,
 				47DD58E8A5CEDA4251579066 /* OpenCodeServerConfig.swift */,
 				8FE226896BC39EE597FAFCD0 /* OpenCodeStateReducer.swift */,
 			);
@@ -500,6 +526,7 @@
 				E879D651F7196549575BBF97 /* Assets.xcassets */,
 				A5DDA19A03EB0243DB1DC306 /* Generated-Info.plist */,
 				D6B5CDE60ADDC75A7E9FA410 /* Info.plist */,
+				C08CAC08E3E7D095333DCE80 /* OpenCodeIOSClient.entitlements */,
 				E25B65397CDDC5C142888B93 /* OpenCodeIOSClientApp.swift */,
 				191EA1C1E8E37911E69AF3B6 /* OpenCodeMacApp.swift */,
 				01D1B0365C559A91D1DDC692 /* API */,
@@ -717,6 +744,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A3404A867579F6DB6B42D6C8 /* OpenCodeIOSClientUITests.swift in Sources */,
+				7149D59C3B14817F09F7F0E0 /* SnapshotHelper.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -740,6 +768,7 @@
 				CD21C8A2BEF609CEBC95ADFE /* OpenCodeChatActivityIntents.swift in Sources */,
 				F0DDC2C9AB7E1CA3B6808C4C /* OpenCodeChatActivityWidget.swift in Sources */,
 				98F51C8BD3AC5CB1093C2E14 /* OpenCodeLiveActivityActionClient.swift in Sources */,
+				032CFC26B2D9A3E945D1F635 /* OpenCodeServerPasswordStore.swift in Sources */,
 				70731237696C01D693E7A9F1 /* OpenCodeStableHash.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -757,6 +786,7 @@
 				86B121E35C91FFE42FF1CDE9 /* AppViewModel+LiveActivities.swift in Sources */,
 				6218B3DCBFC6E9EA3360E9D8 /* AppViewModel+Previews.swift in Sources */,
 				8945B563B3D2F9410A0056F8 /* AppViewModel+Projects.swift in Sources */,
+				8255CCB5E68A9B5842A29995 /* AppViewModel+Screenshots.swift in Sources */,
 				86BDB319B3F9D405C52E1A03 /* AppViewModel+Sessions.swift in Sources */,
 				78216DA038E15E620A2E0DFE /* AppViewModel+VCS.swift in Sources */,
 				67B93C48ED205DEB346F173D /* AppViewModel.swift in Sources */,
@@ -781,12 +811,17 @@
 				4B00D3200BEE83CAF8A9F15F /* NewSessionDefaults.swift in Sources */,
 				AF0C12B963DBDA1AC2401B00 /* OpenCodeAPIClient.swift in Sources */,
 				3B5949306E21CE58EC87BC5A /* OpenCodeBootstrap.swift in Sources */,
+				BF2CC9979B5A906197DD8E0B /* OpenCodeChatActivityAttributes.swift in Sources */,
 				12C2018FDD2650ACC154D7F7 /* OpenCodeEventManager.swift in Sources */,
 				2E2707E7012D184C704EC2A2 /* OpenCodeEventStream.swift in Sources */,
+				B2BA826B286ECDBF80898054 /* OpenCodeLiveActivityActionClient.swift in Sources */,
 				D8B626426FC2329F3D507929 /* OpenCodeMacApp.swift in Sources */,
 				532EE408673EBED8465A2178 /* OpenCodeModels.swift in Sources */,
 				3E07A8BF2A0D7A9A844C8A99 /* OpenCodePlatformSupport.swift in Sources */,
+				9556984BB2C2F5AF9D93E252 /* OpenCodeSavedServer.swift in Sources */,
 				B4886ACD51D0D4389A832A55 /* OpenCodeServerConfig.swift in Sources */,
+				C97B32A827B47B9F6E355037 /* OpenCodeServerPasswordStore.swift in Sources */,
+				DCD16278DD1E5C3C7967EE42 /* OpenCodeStableHash.swift in Sources */,
 				AFCBBA57E0E892FFF916FD2F /* OpenCodeStateReducer.swift in Sources */,
 				7B2BC4A43CDA11F3EF2F3388 /* PermissionActionStack.swift in Sources */,
 				7565023DB628EFA04CE27909 /* PermissionCard.swift in Sources */,
@@ -798,6 +833,7 @@
 				B26FDEB79CB98BD9ED814807 /* ReasoningBlock.swift in Sources */,
 				E68003F153F1CCF48AF626D9 /* RootPreviews.swift in Sources */,
 				192544AB25B47E88A3365D61 /* RootView.swift in Sources */,
+				A9FD3644B48741E26BF23EF9 /* ScreenshotSceneView.swift in Sources */,
 				FD0CA1847F5C063DCEDDE00A /* SessionAvatar.swift in Sources */,
 				43F9653E8519801E2457452C /* SessionListView.swift in Sources */,
 				D980C38ADDBB9FF1127FFE04 /* SessionLiveActivityMenu.swift in Sources */,
@@ -823,6 +859,7 @@
 				4D623AA37D44D2CCCA2CFF83 /* AppViewModel+LiveActivities.swift in Sources */,
 				8429493ED301FB3223F1EDE5 /* AppViewModel+Previews.swift in Sources */,
 				E1711616244122E08AA8F0FD /* AppViewModel+Projects.swift in Sources */,
+				E0618F3F267957A90EC83E01 /* AppViewModel+Screenshots.swift in Sources */,
 				19A2A0CA6D3A6AEEC0C28353 /* AppViewModel+Sessions.swift in Sources */,
 				2B735C6C5359A927E892AEF2 /* AppViewModel+VCS.swift in Sources */,
 				23886D92B15F6BE27FAB627B /* AppViewModel.swift in Sources */,
@@ -854,7 +891,9 @@
 				4E3D67EBF2FDF9A640B5863E /* OpenCodeLiveActivityActionClient.swift in Sources */,
 				3781AB208B728108C5F33335 /* OpenCodeModels.swift in Sources */,
 				207ABDA2A8973B1AE93F4E95 /* OpenCodePlatformSupport.swift in Sources */,
+				B2608D2922DC434AFCAF03CC /* OpenCodeSavedServer.swift in Sources */,
 				EF7A2854EBAFD83C8D9A04F0 /* OpenCodeServerConfig.swift in Sources */,
+				33D639D324CB7874C62439FF /* OpenCodeServerPasswordStore.swift in Sources */,
 				C7CA43007F7D03B653B97EB5 /* OpenCodeStableHash.swift in Sources */,
 				6CD4DEE3C0B5286E0D723483 /* OpenCodeStateReducer.swift in Sources */,
 				A3DAF2FA3EE5B87FCE3169C6 /* PermissionActionStack.swift in Sources */,
@@ -867,6 +906,7 @@
 				35F4201348FB82F0689166EB /* ReasoningBlock.swift in Sources */,
 				5E41FF637E24C105822409C8 /* RootPreviews.swift in Sources */,
 				41BA3669E71731459F41F8EA /* RootView.swift in Sources */,
+				84C94042495DA30716E6C982 /* ScreenshotSceneView.swift in Sources */,
 				769325F7D95B036B9C98C0F9 /* SessionAvatar.swift in Sources */,
 				BF46C26DEF4B2706BAF1E6D1 /* SessionListView.swift in Sources */,
 				71E3BC763941CB2A6B6399C4 /* SessionLiveActivityMenu.swift in Sources */,
@@ -912,73 +952,22 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client.tests";
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenCodeIOSClient.app/OpenCodeIOSClient";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.tests;
+				PRODUCT_NAME = OpenCodeIOSClientTests;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = "";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenClient.app/OpenClient";
 			};
 			name = Release;
 		};
 		37A38C3C67B13A34407EB08A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = 845JU3PD5V;
-				ENABLE_NS_ASSERTIONS = NO;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
-				MTL_ENABLE_DEBUG_INFO = NO;
-				MTL_FAST_MATH = YES;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_COMPILATION_MODE = wholemodule;
-				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
@@ -986,65 +975,12 @@
 		37B20BB1A98ED0C0FD08E35D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_SEARCH_USER_PATHS = NO;
-				CLANG_ANALYZER_NONNULL = YES;
-				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
-				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
-				CLANG_CXX_LIBRARY = "libc++";
-				CLANG_ENABLE_MODULES = YES;
-				CLANG_ENABLE_OBJC_ARC = YES;
-				CLANG_ENABLE_OBJC_WEAK = YES;
-				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
-				CLANG_WARN_BOOL_CONVERSION = YES;
-				CLANG_WARN_COMMA = YES;
-				CLANG_WARN_CONSTANT_CONVERSION = YES;
-				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
-				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
-				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
-				CLANG_WARN_EMPTY_BODY = YES;
-				CLANG_WARN_ENUM_CONVERSION = YES;
-				CLANG_WARN_INFINITE_RECURSION = YES;
-				CLANG_WARN_INT_CONVERSION = YES;
-				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
-				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
-				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
-				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
-				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
-				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
-				CLANG_WARN_STRICT_PROTOTYPES = YES;
-				CLANG_WARN_SUSPICIOUS_MOVE = YES;
-				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
-				CLANG_WARN_UNREACHABLE_CODE = YES;
-				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
-				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = 845JU3PD5V;
-				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_TESTABILITY = YES;
-				GCC_C_LANGUAGE_STANDARD = gnu11;
-				GCC_DYNAMIC_NO_PIC = NO;
-				GCC_NO_COMMON_BLOCKS = YES;
-				GCC_OPTIMIZATION_LEVEL = 0;
-				GCC_PREPROCESSOR_DEFINITIONS = (
-					"$(inherited)",
-					"DEBUG=1",
-				);
-				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
-				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
-				GCC_WARN_UNDECLARED_SELECTOR = YES;
-				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
-				GCC_WARN_UNUSED_FUNCTION = YES;
-				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
-				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
-				MTL_FAST_MATH = YES;
-				ONLY_ACTIVE_ARCH = YES;
-				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
@@ -1052,37 +988,25 @@
 		3CA8C140CADC377BF35011CD /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = OpenCodeChatActivityExtension/OpenCodeChatActivityExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = OpenCodeChatActivityExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client.liveactivity";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.liveactivity;
 				PRODUCT_NAME = OpenCodeChatActivityExtension;
-				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = "";
 			};
 			name = Debug;
 		};
 		595BF7E4FBD810F72C1F7FEF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client.macos.tests";
-				SDKROOT = macosx;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.macos.tests;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenCodeMacClient.app/Contents/MacOS/OpenCodeMacClient";
 			};
 			name = Debug;
@@ -1092,17 +1016,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_ENTITLEMENTS = OpenCodeIOSClient/OpenCodeIOSClient.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = "OpenCodeIOSClient/Generated-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client";
-				PRODUCT_NAME = OpenCodeIOSClient;
-				SDKROOT = iphoneos;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient;
+				PRODUCT_NAME = OpenClient;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1113,18 +1033,10 @@
 		83F882A870541B5EDE0113C7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-					"@loader_path/../Frameworks",
-				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client.macos.tests";
-				SDKROOT = macosx;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.macos.tests;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenCodeMacClient.app/Contents/MacOS/OpenCodeMacClient";
 			};
 			name = Release;
@@ -1135,18 +1047,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OpenCodeIOSClient/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = OpenCode;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
+				INFOPLIST_KEY_CFBundleDisplayName = OpenClient;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client.macos";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.macos;
 				PRODUCT_NAME = OpenCodeMacClient;
-				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Release;
@@ -1156,17 +1062,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_ENTITLEMENTS = OpenCodeIOSClient/OpenCodeIOSClient.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = "OpenCodeIOSClient/Generated-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client";
-				PRODUCT_NAME = OpenCodeIOSClient;
-				SDKROOT = iphoneos;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient;
+				PRODUCT_NAME = OpenClient;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -1177,18 +1079,13 @@
 		C93032DB083B98279E43133F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client.uitests";
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.uitests;
+				PRODUCT_NAME = OpenCodeIOSClientUITests;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = "";
 				TEST_TARGET_NAME = OpenCodeIOSClient;
 			};
 			name = Debug;
@@ -1200,33 +1097,24 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client.tests";
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenCodeIOSClient.app/OpenCodeIOSClient";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.tests;
+				PRODUCT_NAME = OpenCodeIOSClientTests;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = "";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenClient.app/OpenClient";
 			};
 			name = Debug;
 		};
 		F3059729406E127440E12557 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client.uitests";
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.uitests;
+				PRODUCT_NAME = OpenCodeIOSClientUITests;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = "";
 				TEST_TARGET_NAME = OpenCodeIOSClient;
 			};
 			name = Release;
@@ -1237,18 +1125,12 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OpenCodeIOSClient/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = OpenCode;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
+				INFOPLIST_KEY_CFBundleDisplayName = OpenClient;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client.macos";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.macos;
 				PRODUCT_NAME = OpenCodeMacClient;
-				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Debug;
@@ -1256,19 +1138,15 @@
 		FADF990DFD22F2C3EBA78024 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = OpenCodeChatActivityExtension/OpenCodeChatActivityExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = OpenCodeChatActivityExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@executable_path/../../Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = "com.ntoporcov.opencode-client.liveactivity";
+				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.liveactivity;
 				PRODUCT_NAME = OpenCodeChatActivityExtension;
-				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				TARGETED_DEVICE_FAMILY = "";
 			};
 			name = Release;
 		};

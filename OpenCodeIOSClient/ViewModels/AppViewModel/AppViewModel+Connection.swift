@@ -73,7 +73,7 @@ extension AppViewModel {
     }
 
     func connect(to serverConfig: OpenCodeServerConfig) async {
-        config = serverConfig
+        config = hydratedServerConfig(from: serverConfig)
         await connect()
     }
 
@@ -84,7 +84,7 @@ extension AppViewModel {
     }
 
     func prepareToEditRecentServer(_ serverConfig: OpenCodeServerConfig) {
-        config = serverConfig
+        config = hydratedServerConfig(from: serverConfig)
         errorMessage = nil
         isShowingAddServerSheet = true
     }
@@ -306,7 +306,21 @@ extension AppViewModel {
 
     func reconnectToSavedServer() async {
         guard hasSavedServer else { return }
+        config = hydratedServerConfig(from: config)
         await connect()
+    }
+
+    private func hydratedServerConfig(from serverConfig: OpenCodeServerConfig) -> OpenCodeServerConfig {
+        guard serverConfig.password.isEmpty,
+              let password = passwordStore.loadPassword(for: serverConfig.recentServerID) else {
+            return serverConfig
+        }
+
+        return OpenCodeServerConfig(
+            baseURL: serverConfig.baseURL,
+            username: serverConfig.username,
+            password: password
+        )
     }
 
     func dismissSavedServerPrompt() {
@@ -315,42 +329,38 @@ extension AppViewModel {
 
     func persistConfig() {
         let recentConfigs = ([config] + recentServerConfigs)
-            .reduce(into: [OpenCodeServerConfig]()) { deduped, serverConfig in
+            .reduce(into: [OpenCodeSavedServer]()) { deduped, serverConfig in
                 guard serverConfig.hasCredentials else { return }
-                guard deduped.contains(where: { $0.recentServerID == serverConfig.recentServerID }) == false else { return }
-                deduped.append(serverConfig)
+                let savedServer = OpenCodeSavedServer(config: serverConfig)
+                guard deduped.contains(where: { $0.recentServerID == savedServer.recentServerID }) == false else { return }
+                deduped.append(savedServer)
             }
 
-        recentServerConfigs = Array(recentConfigs.prefix(Self.maxRecentServerCount))
+        recentServerConfigs = Array(recentConfigs.prefix(Self.maxRecentServerCount)).map {
+            $0.serverConfig(password: passwordStore.loadPassword(for: $0.recentServerID) ?? ($0.recentServerID == config.recentServerID ? config.password : ""))
+        }
         hasSavedServer = recentServerConfigs.isEmpty == false
         showSavedServerPrompt = false
 
-        guard let latestConfig = recentServerConfigs.first,
-              let latestData = try? JSONEncoder().encode(latestConfig),
-              let recentData = try? JSONEncoder().encode(recentServerConfigs) else {
+        for serverConfig in recentServerConfigs {
+            passwordStore.savePassword(serverConfig.password, for: serverConfig.recentServerID)
+        }
+
+        let savedServers = recentServerConfigs.map(OpenCodeSavedServer.init)
+        guard let recentData = try? JSONEncoder().encode(savedServers) else {
             return
         }
 
-        UserDefaults.standard.set(latestData, forKey: StorageKey.lastServerConfig)
         UserDefaults.standard.set(recentData, forKey: StorageKey.recentServerConfigs)
-    }
-
-    func loadSavedConfig() -> OpenCodeServerConfig? {
-        guard let data = UserDefaults.standard.data(forKey: StorageKey.lastServerConfig) else {
-            return nil
-        }
-
-        return try? JSONDecoder().decode(OpenCodeServerConfig.self, from: data)
     }
 
     func loadRecentServerConfigs() -> [OpenCodeServerConfig] {
         if let data = UserDefaults.standard.data(forKey: StorageKey.recentServerConfigs),
-           let configs = try? JSONDecoder().decode([OpenCodeServerConfig].self, from: data) {
-            return Array(configs.prefix(Self.maxRecentServerCount))
-        }
-
-        if let savedConfig = loadSavedConfig() {
-            return [savedConfig]
+           let savedServers = try? JSONDecoder().decode([OpenCodeSavedServer].self, from: data) {
+            return Array(savedServers.prefix(Self.maxRecentServerCount)).map { savedServer in
+                let password = passwordStore.loadPassword(for: savedServer.recentServerID) ?? ""
+                return savedServer.serverConfig(password: password)
+            }
         }
 
         return []
@@ -381,17 +391,18 @@ extension AppViewModel {
         }
 
         if recentServerConfigs.isEmpty {
-            UserDefaults.standard.removeObject(forKey: StorageKey.lastServerConfig)
             UserDefaults.standard.removeObject(forKey: StorageKey.recentServerConfigs)
+            passwordStore.deletePassword(for: serverConfig.recentServerID)
             return
         }
 
-        guard let latestData = try? JSONEncoder().encode(recentServerConfigs[0]),
-              let recentData = try? JSONEncoder().encode(recentServerConfigs) else {
+        passwordStore.deletePassword(for: serverConfig.recentServerID)
+
+        let savedServers = recentServerConfigs.map(OpenCodeSavedServer.init)
+        guard let recentData = try? JSONEncoder().encode(savedServers) else {
             return
         }
 
-        UserDefaults.standard.set(latestData, forKey: StorageKey.lastServerConfig)
         UserDefaults.standard.set(recentData, forKey: StorageKey.recentServerConfigs)
     }
 
@@ -401,7 +412,6 @@ extension AppViewModel {
             return false
         }
 
-        UserDefaults.standard.removeObject(forKey: StorageKey.lastServerConfig)
         UserDefaults.standard.removeObject(forKey: StorageKey.recentServerConfigs)
         config.baseURL = environment["OPENCODE_UI_TEST_BASE_URL"] ?? "http://127.0.0.1:4096"
         config.username = environment["OPENCODE_UI_TEST_USERNAME"] ?? "opencode"

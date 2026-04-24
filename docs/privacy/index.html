@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OpenClient Privacy Policy</title>
+    <meta name="description" content="Privacy Policy for OpenClient.">
+    <link rel="stylesheet" href="../styles.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="wrap">
+        <a class="brand" href="../">OpenClient</a>
+        <nav class="nav" aria-label="Primary">
+          <a href="../">Home</a>
+          <a href="https://github.com/ntoporcov/openclient/issues">Support</a>
+          <a href="mailto:ntoporcov@me.com">Contact</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="policy-layout">
+      <article class="panel policy">
+        <h1>Privacy Policy</h1>
+        <p class="meta">Last updated: April 24, 2026</p>
+
+        <h2>Overview</h2>
+        <p>OpenClient is a native client for connecting to a user-selected OpenCode server.</p>
+        <p>This app is designed for self-hosted use. OpenClient does not provide its own hosted AI service. Instead, it connects to the server you configure.</p>
+
+        <h2>Information We Process</h2>
+        <p>OpenClient may process the following categories of information in order to work:</p>
+        <ul>
+          <li>server connection details you enter, such as server URL and username</li>
+          <li>your server password</li>
+          <li>chat messages, prompts, replies, and session content received from your OpenCode server</li>
+          <li>project, session, todo, permission, and question data returned by your OpenCode server</li>
+          <li>local app settings such as recent servers and workspace preferences</li>
+        </ul>
+
+        <h2>How Information Is Stored On Device</h2>
+        <p>OpenClient stores some information locally on your device.</p>
+        <ul>
+          <li>server passwords are stored in the system Keychain</li>
+          <li>non-sensitive recent server metadata, such as server URL and username, may be stored in local app storage</li>
+          <li>local UI state and preferences may also be stored on device</li>
+        </ul>
+        <p>OpenClient does not intentionally store your server password in plain text in standard app preferences.</p>
+
+        <h2>How Information Is Sent Over the Network</h2>
+        <p>OpenClient sends data to the OpenCode server that you configure.</p>
+        <p>That can include:</p>
+        <ul>
+          <li>credentials needed to authenticate with your server</li>
+          <li>chat prompts and replies</li>
+          <li>session, project, todo, permission, and question actions</li>
+          <li>related request data needed to operate the app</li>
+        </ul>
+        <p>Because OpenClient connects to servers chosen by the user, network security depends in part on how that server is configured.</p>
+        <ul>
+          <li><code>https://</code> connections provide transport protection through HTTPS/TLS</li>
+          <li><code>http://</code> connections do not use HTTPS/TLS, even if you are connecting through a private or encrypted network such as Tailscale</li>
+        </ul>
+        <p>OpenClient warns before establishing an insecure <code>http://</code> connection entered manually.</p>
+
+        <h2>Self-Hosted Server Responsibility</h2>
+        <p>Your OpenCode server is operated separately from OpenClient.</p>
+        <p>In other words: OpenClient is the remote control, but your OpenCode server is still the thing doing the work.</p>
+        <p>That means the server side is where things like these are decided:</p>
+        <ul>
+          <li>server-side logging</li>
+          <li>server-side data retention</li>
+          <li>access controls</li>
+          <li>infrastructure security</li>
+          <li>any third-party AI or tool integrations configured on that server</li>
+        </ul>
+        <p>If you connect OpenClient to a server run by someone else, they may be able to see whatever you send through it. Choose your server like you would choose who gets the keys to your workshop.</p>
+
+        <h2>Analytics And Tracking</h2>
+        <p>OpenClient does not currently include third-party analytics or advertising SDKs in this codebase.</p>
+        <p>OpenClient is not designed to track you across apps or websites.</p>
+        <p>If this changes in a future release, this policy should be updated before release.</p>
+
+        <h2>Crash And Diagnostic Information</h2>
+        <p>This codebase does not currently include a third-party crash reporting service.</p>
+        <p>The app may show local debug information inside the app for development and troubleshooting. That information remains part of the app experience unless you choose to share it yourself.</p>
+
+        <h2>Live Activities</h2>
+        <p>If you enable Live Activities, OpenClient may display limited session-related status and action prompts on the Lock Screen or Dynamic Island.</p>
+        <p>This content may be visible to anyone who can see your device screen while it is displayed.</p>
+
+        <h2>Data Retention</h2>
+        <p>Data retained by OpenClient depends on your usage.</p>
+        <ul>
+          <li>saved connection metadata may remain on device until you remove it</li>
+          <li>server passwords stored in Keychain remain until deleted by the app or removed with the app/account data</li>
+          <li>chat and session data displayed in the app may also be reloaded from your configured OpenCode server</li>
+        </ul>
+        <p>Data stored or retained by your OpenCode server is up to that server and whoever runs it.</p>
+
+        <h2>Your Choices</h2>
+        <ul>
+          <li>choose which server OpenClient connects to</li>
+          <li>remove saved recent servers in the app</li>
+          <li>choose whether to use insecure <code>http://</code> connections</li>
+          <li>uninstall the app to remove app data stored with the installation</li>
+        </ul>
+
+        <h2>Children’s Privacy</h2>
+        <p>OpenClient is intended for general developer and productivity use and is not specifically directed to children.</p>
+
+        <h2>Changes To This Policy</h2>
+        <p>This privacy policy may be updated over time to reflect product or infrastructure changes.</p>
+        <p>When material changes are made, the updated version should be published before or with the relevant release.</p>
+
+        <h2>Contact</h2>
+        <p>For support, bug reports, or privacy questions, you can use either of these:</p>
+        <ul>
+          <li>GitHub issues: <a href="https://github.com/ntoporcov/openclient/issues">https://github.com/ntoporcov/openclient/issues</a></li>
+          <li>Email: <a href="mailto:ntoporcov@me.com">ntoporcov@me.com</a></li>
+        </ul>
+      </article>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap">
+        <div class="muted">OpenClient</div>
+        <nav class="nav" aria-label="Footer">
+          <a href="../">Home</a>
+          <a href="https://github.com/ntoporcov/openclient">GitHub</a>
+        </nav>
+      </div>
+    </footer>
+  </body>
+</html>

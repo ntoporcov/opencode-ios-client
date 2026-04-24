@@ -9,6 +9,36 @@ extension AppViewModel {
         let displayPrefix: String?
     }
 
+    func prepareDirectorySelection(_ directory: String?) {
+        withAnimation(opencodeSelectionAnimation) {
+            selectedDirectory = directory
+            selectedProjectContentTab = .sessions
+            directoryState.isLoadingSessions = true
+            directoryState.selectedSession = nil
+            directoryState.isLoadingSelectedSession = false
+            directoryState.messages = []
+            directoryState.todos = []
+            directoryState.permissions = []
+            directoryState.questions = []
+            directoryState.vcsInfo = nil
+            directoryState.vcsFileStatuses = []
+            directoryState.vcsDiffsByMode = [:]
+            directoryState.selectedVCSMode = .git
+            directoryState.selectedVCSFile = nil
+            directoryState.projectFilesMode = .changes
+            directoryState.fileTreeRootNodes = []
+            directoryState.fileTreeChildrenByParentPath = [:]
+            directoryState.expandedFileTreeDirectories = []
+            directoryState.selectedProjectFilePath = nil
+            directoryState.fileContentsByPath = [:]
+            directoryState.isLoadingFileTree = false
+            directoryState.isLoadingSelectedFileContent = false
+            directoryState.fileTreeErrorMessage = nil
+            directoryState.fileContentErrorMessage = nil
+            directoryState.vcsErrorMessage = nil
+        }
+    }
+
     var effectiveSelectedDirectory: String? {
         if let selectedDirectory, !selectedDirectory.isEmpty {
             return selectedDirectory
@@ -181,31 +211,7 @@ extension AppViewModel {
     }
 
     func selectDirectory(_ directory: String?) async {
-        withAnimation(opencodeSelectionAnimation) {
-            selectedDirectory = directory
-            selectedProjectContentTab = .sessions
-            directoryState.selectedSession = nil
-            directoryState.messages = []
-            directoryState.todos = []
-            directoryState.permissions = []
-            directoryState.questions = []
-            directoryState.vcsInfo = nil
-            directoryState.vcsFileStatuses = []
-            directoryState.vcsDiffsByMode = [:]
-            directoryState.selectedVCSMode = .git
-            directoryState.selectedVCSFile = nil
-            directoryState.projectFilesMode = .changes
-            directoryState.fileTreeRootNodes = []
-            directoryState.fileTreeChildrenByParentPath = [:]
-            directoryState.expandedFileTreeDirectories = []
-            directoryState.selectedProjectFilePath = nil
-            directoryState.fileContentsByPath = [:]
-            directoryState.isLoadingFileTree = false
-            directoryState.isLoadingSelectedFileContent = false
-            directoryState.fileTreeErrorMessage = nil
-            directoryState.fileContentErrorMessage = nil
-            directoryState.vcsErrorMessage = nil
-        }
+        prepareDirectorySelection(directory)
         do {
             if let directory, !directory.isEmpty {
                 _ = try await client.listSessions(directory: directory, roots: true, limit: 55)
@@ -219,12 +225,16 @@ extension AppViewModel {
                 isShowingProjectPicker = false
             }
         } catch {
+            directoryState.isLoadingSessions = false
             errorMessage = error.localizedDescription
         }
     }
 
     func selectProject(_ project: OpenCodeProject?) async {
         guard let project else {
+            withAnimation(opencodeSelectionAnimation) {
+                currentProject = projects.first(where: { $0.id == "global" })
+            }
             await selectDirectory(nil)
             return
         }
@@ -237,6 +247,9 @@ extension AppViewModel {
             return
         }
 
+        withAnimation(opencodeSelectionAnimation) {
+            currentProject = project
+        }
         await selectDirectory(project.worktree)
     }
 

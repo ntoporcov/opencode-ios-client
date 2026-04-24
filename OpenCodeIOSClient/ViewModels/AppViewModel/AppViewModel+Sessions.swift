@@ -35,6 +35,20 @@ enum AppleIntelligenceIntent: String, CaseIterable, Sendable {
 }
 
 extension AppViewModel {
+    func prepareSessionSelection(_ session: OpenCodeSession) {
+        withAnimation(opencodeSelectionAnimation) {
+            selectedProjectContentTab = .sessions
+            directoryState.selectedSession = session
+            directoryState.isLoadingSelectedSession = true
+            directoryState.messages = []
+            directoryState.todos = []
+            directoryState.permissions = []
+            directoryState.questions = []
+            directoryState.selectedVCSFile = nil
+        }
+        streamDirectory = session.directory
+    }
+
     var defaultAppleIntelligenceUserInstructions: String {
         """
         Default to using no tools.
@@ -71,6 +85,7 @@ extension AppViewModel {
     func reloadSessions() async throws {
         let bootstrap = try await OpenCodeBootstrap.bootstrapDirectory(client: client, directory: effectiveSelectedDirectory)
         withAnimation(opencodeSelectionAnimation) {
+            directoryState.isLoadingSessions = false
             directoryState.sessions = bootstrap.sessions
             prunePinnedSessionsForCurrentScope()
         }
@@ -126,6 +141,7 @@ extension AppViewModel {
             upsertVisibleSession(session)
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.selectedSession = session
+                directoryState.isLoadingSelectedSession = true
             }
             streamDirectory = session.directory
             withAnimation(opencodeSelectionAnimation) {
@@ -149,13 +165,7 @@ extension AppViewModel {
             return
         }
 
-        withAnimation(opencodeSelectionAnimation) {
-            selectedProjectContentTab = .sessions
-            directoryState.selectedSession = session
-            directoryState.todos = []
-            directoryState.selectedVCSFile = nil
-        }
-        streamDirectory = session.directory
+        prepareSessionSelection(session)
         do {
             async let messages: Void = loadMessages(for: session)
             async let statuses: Void = reloadSessionStatuses()
@@ -165,6 +175,7 @@ extension AppViewModel {
             await maybeAutoStartLiveActivity(for: session)
             errorMessage = nil
         } catch {
+            directoryState.isLoadingSelectedSession = false
             errorMessage = error.localizedDescription
         }
     }
@@ -411,6 +422,7 @@ extension AppViewModel {
         prefetchToolMessageDetails(for: session, messages: directoryState.messages)
         refreshLiveActivityIfNeeded(for: session.id)
         await loadTodos(for: session)
+        directoryState.isLoadingSelectedSession = false
     }
 
     func mergeMessagesPreservingStreamProgress(

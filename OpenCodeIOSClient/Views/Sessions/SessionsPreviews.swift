@@ -1,5 +1,6 @@
 import SwiftUI
 
+#if DEBUG
 #Preview("Session List") {
     NavigationStack {
         SessionListView(
@@ -33,3 +34,4 @@ import SwiftUI
     }
     .listStyle(.plain)
 }
+#endif

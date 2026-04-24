@@ -1,5 +1,5 @@
 import XCTest
-@testable import OpenCodeIOSClient
+@testable import OpenClient
 
 final class OpenCodeStreamingTests: XCTestCase {
     func testSSEParserBuildsEventFromRawLines() {

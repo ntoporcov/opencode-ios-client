@@ -18,9 +18,9 @@ struct OpenCodeChatActivityAttributes: ActivityAttributes {
 
     var sessionID: String
     var sessionTitle: String
+    var credentialID: String
     var serverBaseURL: String
     var serverUsername: String
-    var serverPassword: String
     var directory: String?
     var workspaceID: String?
 }
@@ -28,7 +28,7 @@ struct OpenCodeChatActivityAttributes: ActivityAttributes {
 #endif
 
 enum OpenCodeChatActivityDeepLink {
-    static let scheme = "opencode"
+    static let scheme = "openclient"
     static let host = "live-activity"
 
     static func openAppURL(sessionID: String, directory: String? = nil, workspaceID: String? = nil) -> URL? {
