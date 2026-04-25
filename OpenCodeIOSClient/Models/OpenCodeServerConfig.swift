@@ -6,6 +6,8 @@ enum OpenCodeInsecureConnectionKind: Sendable {
 }
 
 struct OpenCodeServerConfig: Equatable, Codable, Sendable {
+    var name: String = ""
+    var iconName: String = ""
     var baseURL: String = "http://127.0.0.1:4096"
     var username: String = "opencode"
     var password: String = ""
@@ -22,12 +24,28 @@ struct OpenCodeServerConfig: Equatable, Codable, Sendable {
         username.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedIconName: String {
+        iconName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var recentServerID: String {
         "\(trimmedBaseURL.lowercased())|\(trimmedUsername.lowercased())"
     }
 
     var displayHost: String {
         sanitizedBaseURL?.host() ?? trimmedBaseURL
+    }
+
+    var displayName: String {
+        trimmedName.isEmpty ? displayHost : trimmedName
+    }
+
+    var displayIconName: String {
+        trimmedIconName.isEmpty ? "server.rack" : trimmedIconName
     }
 
     var usesInsecureHTTP: Bool {

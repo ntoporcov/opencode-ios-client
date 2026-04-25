@@ -7,6 +7,11 @@ let defaultAppleIntelligenceSystemInstructions = ""
 
 @MainActor
 final class AppViewModel: ObservableObject {
+    enum SavedServerEditorMode: Equatable {
+        case add
+        case edit(originalServerID: String)
+    }
+
     enum ProjectContentTab: String, CaseIterable {
         case sessions
         case git
@@ -50,6 +55,7 @@ final class AppViewModel: ObservableObject {
     @Published var createProjectSelectedDirectory: String?
     @Published var directoryState = OpenCodeDirectoryState()
     @Published var toolMessageDetails: [String: OpenCodeMessageEnvelope] = [:]
+    @Published var cachedMessagesBySessionID: [String: [OpenCodeMessageEnvelope]] = [:]
     @Published var sessionPreviews: [String: SessionPreview] = [:]
     @Published var pinnedSessionIDsByScope: [String: [String]] = [:]
     @Published var liveActivityAutoStartByScope: [String: Bool] = [:]
@@ -70,6 +76,7 @@ final class AppViewModel: ObservableObject {
     @Published var hasSavedServer = false
     @Published var showSavedServerPrompt = false
     @Published var isShowingAddServerSheet = false
+    @Published var savedServerEditorMode: SavedServerEditorMode = .add
     @Published var isShowingCreateSessionSheet = false
     @Published var isShowingConfigurationsSheet = false
     @Published var debugLastEventSummary = ""

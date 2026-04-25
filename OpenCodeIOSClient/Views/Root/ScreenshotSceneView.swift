@@ -23,8 +23,6 @@ struct ScreenshotSceneView: View {
         case .connection, .recentServers:
             NavigationStack {
                 ConnectionView(viewModel: viewModel)
-                    .navigationTitle("OpenClient")
-                    .opencodeLargeNavigationTitle()
             }
         case .projects:
             NavigationStack {

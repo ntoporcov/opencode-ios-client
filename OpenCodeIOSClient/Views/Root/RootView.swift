@@ -53,8 +53,6 @@ struct RootView: View {
             } else {
                 NavigationStack {
                     ConnectionView(viewModel: viewModel)
-                        .navigationTitle("OpenCode")
-                        .opencodeLargeNavigationTitle()
                 }
             }
         }
