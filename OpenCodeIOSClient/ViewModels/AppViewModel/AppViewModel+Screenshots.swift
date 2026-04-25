@@ -174,9 +174,9 @@ enum OpenClientScreenshotData {
     static let sessions = [releaseSession, followupSession, archivedSession]
 
     static let recentServers = [
-        secureConfig,
-        OpenCodeServerConfig(baseURL: "http://100.92.11.7:4096", username: "nick", password: "tailnet-token"),
-        OpenCodeServerConfig(baseURL: "https://lab.open-client.com", username: "team", password: "lab-token")
+        OpenCodeServerConfig(name: "Demo Cloud", iconName: "cloud.fill", baseURL: secureConfig.baseURL, username: secureConfig.username, password: secureConfig.password),
+        OpenCodeServerConfig(name: "Tailscale", iconName: "network", baseURL: "http://100.92.11.7:4096", username: "nick", password: "tailnet-token"),
+        OpenCodeServerConfig(iconName: "cube.box.fill", baseURL: "https://lab.open-client.com", username: "team", password: "lab-token")
     ]
 
     static let sessionPreviews: [String: SessionPreview] = [

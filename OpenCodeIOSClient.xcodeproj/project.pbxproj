@@ -139,6 +139,7 @@
 		DB0CD5BD8F78FD3E579FB413 /* TodoCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8075AA645B1FFF1574EF2A95 /* TodoCard.swift */; };
 		DCD16278DD1E5C3C7967EE42 /* OpenCodeStableHash.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70A5B94B94132296B0A9AB18 /* OpenCodeStableHash.swift */; };
 		E0618F3F267957A90EC83E01 /* AppViewModel+Screenshots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A00C1F7850265F54ECFFEDD /* AppViewModel+Screenshots.swift */; };
+		E1622D432C0701C5AAA52C46 /* OpenCodeSavedServerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 475E008AEBCAC91BC0AC5E31 /* OpenCodeSavedServerTests.swift */; };
 		E1711616244122E08AA8F0FD /* AppViewModel+Projects.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24200A73829BD02C29A419F2 /* AppViewModel+Projects.swift */; };
 		E1ABB6FF3613903938110686 /* TodoInspectorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22332A66515C9C38EB202DC /* TodoInspectorView.swift */; };
 		E1F563E495CB9A257B481AD1 /* OpenCodeIdentifierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FF52B1C1E18074595B57A274 /* OpenCodeIdentifierTests.swift */; };
@@ -228,6 +229,7 @@
 		3C2E4443213AED890D5731AD /* OpenCodeModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeModels.swift; sourceTree = "<group>"; };
 		41F2AB7FE622C4FDB3040763 /* OpenCodeStreamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeStreamingTests.swift; sourceTree = "<group>"; };
 		462C06C5CAA57A2203DCAA3E /* PermissionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionCard.swift; sourceTree = "<group>"; };
+		475E008AEBCAC91BC0AC5E31 /* OpenCodeSavedServerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeSavedServerTests.swift; sourceTree = "<group>"; };
 		47DD58E8A5CEDA4251579066 /* OpenCodeServerConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenCodeServerConfig.swift; sourceTree = "<group>"; };
 		483F003FBB5C24B5B8B08C06 /* GitStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitStatusView.swift; sourceTree = "<group>"; };
 		48723322E87F93E488181C34 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -353,6 +355,7 @@
 				2C863806B8786D01DC82EE9E /* AppViewModelTests.swift */,
 				FCA8E8783A279403F85973BA /* OpenCodeAPIClientTests.swift */,
 				FF52B1C1E18074595B57A274 /* OpenCodeIdentifierTests.swift */,
+				475E008AEBCAC91BC0AC5E31 /* OpenCodeSavedServerTests.swift */,
 				41F2AB7FE622C4FDB3040763 /* OpenCodeStreamingTests.swift */,
 			);
 			path = OpenCodeIOSClientTests;
@@ -659,28 +662,22 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					03ABFB08B570A48C3F9A2AA3 = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 					323A6934DF3EC04D7353FAEF = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 						TestTargetID = FE46DB5F396A39389531C069;
 					};
 					3A4666958AE1034C80B61FAB = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 					BB490846463F18E8EE36413F = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 					FB00EC303AAA20A8C2BAEED2 = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 					FE46DB5F396A39389531C069 = {
-						DevelopmentTeam = 845JU3PD5V;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -755,6 +752,7 @@
 				A6B5B539DE72F0CDADDB13C3 /* AppViewModelTests.swift in Sources */,
 				D4E1BDD6DC2915C9B06F45AC /* OpenCodeAPIClientTests.swift in Sources */,
 				E1F563E495CB9A257B481AD1 /* OpenCodeIdentifierTests.swift in Sources */,
+				E1622D432C0701C5AAA52C46 /* OpenCodeSavedServerTests.swift in Sources */,
 				BA04F4DD96A0C39C2511402F /* OpenCodeStreamingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -952,10 +950,19 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.tests;
 				PRODUCT_NAME = OpenCodeIOSClientTests;
+				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				TARGETED_DEVICE_FAMILY = "";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenClient.app/OpenClient";
 			};
 			name = Release;
@@ -963,11 +970,57 @@
 		37A38C3C67B13A34407EB08A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 845JU3PD5V;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
 				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
@@ -975,12 +1028,64 @@
 		37B20BB1A98ED0C0FD08E35D /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 845JU3PD5V;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
@@ -992,21 +1097,38 @@
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = OpenCodeChatActivityExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.liveactivity;
 				PRODUCT_NAME = OpenCodeChatActivityExtension;
+				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				TARGETED_DEVICE_FAMILY = "";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
 		};
 		595BF7E4FBD810F72C1F7FEF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.macos.tests;
+				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenCodeMacClient.app/Contents/MacOS/OpenCodeMacClient";
 			};
 			name = Debug;
@@ -1017,13 +1139,20 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = OpenCodeIOSClient/OpenCodeIOSClient.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = "OpenCodeIOSClient/Generated-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient;
 				PRODUCT_NAME = OpenClient;
+				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1033,10 +1162,18 @@
 		83F882A870541B5EDE0113C7 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.macos.tests;
+				SDKROOT = macosx;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenCodeMacClient.app/Contents/MacOS/OpenCodeMacClient";
 			};
 			name = Release;
@@ -1047,12 +1184,18 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OpenCodeIOSClient/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = OpenClient;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.macos;
 				PRODUCT_NAME = OpenCodeMacClient;
+				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Release;
@@ -1063,13 +1206,20 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = OpenCodeIOSClient/OpenCodeIOSClient.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = "OpenCodeIOSClient/Generated-Info.plist";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient;
 				PRODUCT_NAME = OpenClient;
+				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = NO;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -1079,13 +1229,23 @@
 		C93032DB083B98279E43133F /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.uitests;
 				PRODUCT_NAME = OpenCodeIOSClientUITests;
+				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				TARGETED_DEVICE_FAMILY = "";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = OpenCodeIOSClient;
 			};
 			name = Debug;
@@ -1097,10 +1257,19 @@
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.tests;
 				PRODUCT_NAME = OpenCodeIOSClientTests;
+				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				TARGETED_DEVICE_FAMILY = "";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenClient.app/OpenClient";
 			};
 			name = Debug;
@@ -1108,13 +1277,23 @@
 		F3059729406E127440E12557 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.uitests;
 				PRODUCT_NAME = OpenCodeIOSClientUITests;
+				SDKROOT = iphoneos;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				TARGETED_DEVICE_FAMILY = "";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = OpenCodeIOSClient;
 			};
 			name = Release;
@@ -1125,12 +1304,18 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = OpenCodeIOSClient/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = OpenClient;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.macos;
 				PRODUCT_NAME = OpenCodeMacClient;
+				SDKROOT = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 			};
 			name = Debug;
@@ -1142,11 +1327,20 @@
 				CODE_SIGN_STYLE = Automatic;
 				INFOPLIST_FILE = OpenCodeChatActivityExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ntoporcov.openclient.liveactivity;
 				PRODUCT_NAME = OpenCodeChatActivityExtension;
+				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				TARGETED_DEVICE_FAMILY = "";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = YES;
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};

@@ -52,7 +52,7 @@ extension AppViewModel {
             isConnected = bootstrap.health.healthy
             serverVersion = bootstrap.health.version
             errorMessage = nil
-            persistConfig()
+            persistConfigAfterSuccessfulConnection()
             loadNewSessionDefaults()
             projects = bootstrap.projects
             selectedDirectory = directorySelection(for: bootstrap.currentProject)
@@ -80,18 +80,40 @@ extension AppViewModel {
     func presentAddServerSheet() {
         config = OpenCodeServerConfig()
         errorMessage = nil
+        savedServerEditorMode = .add
         isShowingAddServerSheet = true
     }
 
     func prepareToEditRecentServer(_ serverConfig: OpenCodeServerConfig) {
         config = hydratedServerConfig(from: serverConfig)
         errorMessage = nil
+        savedServerEditorMode = .edit(originalServerID: serverConfig.recentServerID)
         isShowingAddServerSheet = true
     }
 
     func dismissAddServerSheet() {
         isShowingAddServerSheet = false
+        savedServerEditorMode = .add
         errorMessage = nil
+    }
+
+    var isEditingSavedServer: Bool {
+        if case .edit = savedServerEditorMode {
+            return true
+        }
+
+        return false
+    }
+
+    var canSaveEditedServer: Bool {
+        !isLoading && config.hasCredentials
+    }
+
+    func saveEditedServer() {
+        guard case let .edit(originalServerID) = savedServerEditorMode else { return }
+        errorMessage = nil
+        upsertSavedServer(config: config, replacingServerID: originalServerID)
+        dismissAddServerSheet()
     }
 
     func disconnect() {
@@ -327,31 +349,15 @@ extension AppViewModel {
         showSavedServerPrompt = false
     }
 
-    func persistConfig() {
-        let recentConfigs = ([config] + recentServerConfigs)
-            .reduce(into: [OpenCodeSavedServer]()) { deduped, serverConfig in
-                guard serverConfig.hasCredentials else { return }
-                let savedServer = OpenCodeSavedServer(config: serverConfig)
-                guard deduped.contains(where: { $0.recentServerID == savedServer.recentServerID }) == false else { return }
-                deduped.append(savedServer)
-            }
-
-        recentServerConfigs = Array(recentConfigs.prefix(Self.maxRecentServerCount)).map {
-            $0.serverConfig(password: passwordStore.loadPassword(for: $0.recentServerID) ?? ($0.recentServerID == config.recentServerID ? config.password : ""))
+    func persistConfigAfterSuccessfulConnection() {
+        switch savedServerEditorMode {
+        case .add:
+            upsertSavedServer(config: config)
+        case let .edit(originalServerID):
+            upsertSavedServer(config: config, replacingServerID: originalServerID)
         }
-        hasSavedServer = recentServerConfigs.isEmpty == false
+        savedServerEditorMode = .add
         showSavedServerPrompt = false
-
-        for serverConfig in recentServerConfigs {
-            passwordStore.savePassword(serverConfig.password, for: serverConfig.recentServerID)
-        }
-
-        let savedServers = recentServerConfigs.map(OpenCodeSavedServer.init)
-        guard let recentData = try? JSONEncoder().encode(savedServers) else {
-            return
-        }
-
-        UserDefaults.standard.set(recentData, forKey: StorageKey.recentServerConfigs)
     }
 
     func loadRecentServerConfigs() -> [OpenCodeServerConfig] {
@@ -398,6 +404,64 @@ extension AppViewModel {
 
         passwordStore.deletePassword(for: serverConfig.recentServerID)
 
+        let savedServers = recentServerConfigs.map(OpenCodeSavedServer.init)
+        guard let recentData = try? JSONEncoder().encode(savedServers) else {
+            return
+        }
+
+        UserDefaults.standard.set(recentData, forKey: StorageKey.recentServerConfigs)
+    }
+
+    private func upsertSavedServer(config: OpenCodeServerConfig, replacingServerID originalServerID: String? = nil) {
+        guard config.hasCredentials else { return }
+
+        let updatedConfig = config
+        let updatedID = updatedConfig.recentServerID
+        let replacedConfig = originalServerID.flatMap { originalID in
+            recentServerConfigs.first { $0.recentServerID == originalID }
+        }
+        let migratedPassword: String?
+        if let replacedConfig, replacedConfig.recentServerID != updatedID, updatedConfig.password.isEmpty {
+            migratedPassword = passwordStore.loadPassword(for: replacedConfig.recentServerID) ?? replacedConfig.password
+        } else {
+            migratedPassword = nil
+        }
+
+        var orderedConfigs = [updatedConfig]
+        orderedConfigs.append(contentsOf: recentServerConfigs.filter { existing in
+            if existing.recentServerID == updatedID {
+                return false
+            }
+
+            if let originalServerID, existing.recentServerID == originalServerID {
+                return false
+            }
+
+            return true
+        })
+
+        recentServerConfigs = Array(orderedConfigs.prefix(Self.maxRecentServerCount))
+        hasSavedServer = recentServerConfigs.isEmpty == false
+
+        if let originalServerID, originalServerID != updatedID {
+            passwordStore.deletePassword(for: originalServerID)
+        }
+
+        if let migratedPassword, migratedPassword.isEmpty == false {
+            passwordStore.savePassword(migratedPassword, for: updatedID)
+                if recentServerConfigs.first?.recentServerID == updatedID {
+                    recentServerConfigs[0].password = migratedPassword
+                }
+        }
+
+        for serverConfig in recentServerConfigs {
+            passwordStore.savePassword(serverConfig.password, for: serverConfig.recentServerID)
+        }
+
+        persistRecentServers()
+    }
+
+    private func persistRecentServers() {
         let savedServers = recentServerConfigs.map(OpenCodeSavedServer.init)
         guard let recentData = try? JSONEncoder().encode(savedServers) else {
             return

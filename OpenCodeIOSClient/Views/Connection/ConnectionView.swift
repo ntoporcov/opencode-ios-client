@@ -16,7 +16,17 @@ struct ConnectionView: View {
     }
 
     var body: some View {
-        List {
+        VStack(spacing: 0) {
+            Text("for OpenCode")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 22)
+                .padding(.trailing, 16)
+                .padding(.bottom, 14)
+                .background(OpenCodePlatformColor.groupedBackground)
+
+            List {
             if hasRecentServers {
                 Section("Recent") {
                     ForEach(viewModel.recentServerConfigs, id: \.recentServerID) { serverConfig in
@@ -42,12 +52,19 @@ struct ConnectionView: View {
                                 }
                             }
                         }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button {
+                                viewModel.prepareToEditRecentServer(serverConfig)
+                            } label: {
+                                Label("Edit", systemImage: "square.and.pencil")
+                            }
+                            .tint(.indigo)
+
                             Button("Remove", role: .destructive) {
                                 viewModel.removeRecentServer(serverConfig)
                             }
                         }
-                        .listRowInsets(EdgeInsets(top: 6, leading: 0, bottom: 6, trailing: 0))
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                         .listRowBackground(Color.clear)
                     }
                 }
@@ -55,7 +72,6 @@ struct ConnectionView: View {
 #if !os(macOS)
                 .listRowSpacing(0.0)
 #endif
-                .padding(.horizontal,1)
                 .padding(.vertical,0)
             }
 
@@ -67,26 +83,28 @@ struct ConnectionView: View {
                 Button {
                     viewModel.presentAppleIntelligenceFolderPicker()
                 } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Try with Apple Intelligence")
-                            .font(.headline)
-                        Text("Don't have OpenCode? You can try some of our functionality with on-device Apple Intelligence")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    AppleIntelligenceConnectionCard()
                 }
+                .buttonStyle(.plain)
                 .disabled(!viewModel.canTryAppleIntelligence)
+                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
 
                 if let summary = viewModel.appleIntelligenceAvailabilitySummary, !viewModel.canTryAppleIntelligence {
                     Text(summary)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
             }
 
+            }
+            .connectionListStyle(hasRecentServers: hasRecentServers)
         }
-        .opencodeGroupedListStyle()
+        .navigationTitle("OpenClient")
         .opencodeLargeNavigationTitle()
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 0) {
@@ -120,12 +138,21 @@ struct ConnectionView: View {
                     ServerConnectionSections(viewModel: viewModel)
                 }
                 .opencodeGroupedListStyle()
-                .navigationTitle("Server")
+                .navigationTitle(viewModel.isEditingSavedServer ? "Edit Server" : "Server")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Cancel") {
                             viewModel.dismissAddServerSheet()
+                        }
+                    }
+
+                    if viewModel.isEditingSavedServer {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Save") {
+                                viewModel.saveEditedServer()
+                            }
+                            .disabled(!viewModel.canSaveEditedServer)
                         }
                     }
                 }
@@ -148,6 +175,28 @@ struct ConnectionView: View {
 }
 
 private struct ServerConnectionSections: View {
+    private struct ConnectionIconOption: Identifiable {
+        let symbolName: String
+        let title: String
+
+        var id: String { symbolName }
+    }
+
+    private static let iconOptions: [ConnectionIconOption] = [
+        ConnectionIconOption(symbolName: "server.rack", title: "Server"),
+        ConnectionIconOption(symbolName: "desktopcomputer", title: "Desktop"),
+        ConnectionIconOption(symbolName: "laptopcomputer", title: "Laptop"),
+        ConnectionIconOption(symbolName: "display", title: "Display"),
+        ConnectionIconOption(symbolName: "iphone", title: "iPhone"),
+        ConnectionIconOption(symbolName: "ipad.landscape", title: "iPad"),
+        ConnectionIconOption(symbolName: "terminal", title: "Terminal"),
+        ConnectionIconOption(symbolName: "network", title: "Network"),
+        ConnectionIconOption(symbolName: "cloud.fill", title: "Cloud"),
+        ConnectionIconOption(symbolName: "internaldrive", title: "Drive"),
+        ConnectionIconOption(symbolName: "house", title: "Home"),
+        ConnectionIconOption(symbolName: "cube.box.fill", title: "Lab"),
+    ]
+
     @ObservedObject var viewModel: AppViewModel
     @State private var acknowledgesInsecureConnection = false
 
@@ -173,6 +222,9 @@ private struct ServerConnectionSections: View {
     var body: some View {
         Group {
             Section {
+                TextField("Name", text: $viewModel.config.name)
+                    .accessibilityIdentifier("connection.name")
+
                 TextField("Base URL", text: $viewModel.config.baseURL)
                     .opencodeDisableTextAutocapitalization()
                     .autocorrectionDisabled()
@@ -195,9 +247,25 @@ private struct ServerConnectionSections: View {
             } header: {
                 Text("Server")
             } footer: {
-                if requiresInsecureConnectionAcknowledgment {
+                if viewModel.isEditingSavedServer {
+                    Text("Save changes to keep this connection handy, or connect now to verify it immediately.")
+                } else if requiresInsecureConnectionAcknowledgment {
                     Text(insecureConnectionMessage)
                 }
+            }
+
+            Section("Icon") {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(Self.iconOptions) { option in
+                            connectionIconButton(for: option)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 4)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .listRowInsets(EdgeInsets(top: 4, leading: 0, bottom: 4, trailing: 0))
             }
 
             Section {
@@ -219,6 +287,66 @@ private struct ServerConnectionSections: View {
         .onChange(of: viewModel.config.trimmedBaseURL) { _, _ in
             acknowledgesInsecureConnection = false
         }
+    }
+
+    @ViewBuilder
+    private func connectionIconButton(for option: ConnectionIconOption) -> some View {
+        let isSelected = viewModel.config.displayIconName == option.symbolName
+
+        Button {
+            viewModel.config.iconName = option.symbolName
+        } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(isSelected ? Color.accentColor.opacity(0.16) : OpenCodePlatformColor.secondaryGroupedBackground)
+
+                    Image(systemName: option.symbolName)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.accentColor : .primary)
+                }
+                .frame(height: 54)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.08), lineWidth: isSelected ? 1.5 : 1)
+                }
+
+                Text(option.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .frame(width: 76)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("connection.icon.\(option.symbolName)")
+        .accessibilityLabel(option.title)
+    }
+}
+
+private struct ConnectionListStyleModifier: ViewModifier {
+    let hasRecentServers: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+#if os(macOS)
+        content.listStyle(.inset)
+#else
+        if hasRecentServers {
+            content
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .background(OpenCodePlatformColor.groupedBackground)
+        } else {
+            content.listStyle(.insetGrouped)
+        }
+#endif
+    }
+}
+
+private extension View {
+    func connectionListStyle(hasRecentServers: Bool) -> some View {
+        modifier(ConnectionListStyleModifier(hasRecentServers: hasRecentServers))
     }
 }
 
@@ -296,6 +424,57 @@ private struct HelpFooterCard: View {
                 .foregroundStyle(.secondary)
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(OpenCodePlatformColor.secondaryGroupedBackground)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+}
+
+private struct AppleIntelligenceConnectionCard: View {
+    var body: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.purple.opacity(0.22), Color.blue.opacity(0.10)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                Image(systemName: "sparkles")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Color.purple)
+            }
+            .frame(width: 48, height: 48)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Try with Apple Intelligence")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+
+                Text("Try a local workspace with on-device Apple Intelligence")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 16)
+
+            Image(systemName: "arrow.up.right.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(OpenCodePlatformColor.secondaryGroupedBackground)
@@ -359,14 +538,14 @@ private struct RecentServerCard: View {
                         )
                     )
 
-                Image(systemName: "server.rack")
+                Image(systemName: serverConfig.displayIconName)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
             }
             .frame(width: 48, height: 48)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(serverConfig.displayHost)
+                Text(serverConfig.displayName)
                     .font(.headline)
                     .foregroundStyle(.primary)
 
@@ -387,6 +566,7 @@ private struct RecentServerCard: View {
                 .foregroundStyle(.secondary)
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .fill(OpenCodePlatformColor.secondaryGroupedBackground)
