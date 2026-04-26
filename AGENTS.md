@@ -412,6 +412,12 @@ xcrun devicectl device install app --device "<device-udid>" \
   "<derived-data>/Build/Products/Debug-iphoneos/OpenClient.app"
 ```
 
+Important:
+
+- do not install from a stale repo-local `DerivedData/Build/Products/...` path unless that folder was the explicit `-derivedDataPath` for the build you just ran
+- a stale `DerivedData/Build/Products/Debug-iphoneos/OpenCodeIOSClient.app` can still exist from pre-rename builds and will carry the wrong bundle identifier
+- prefer either the real `TARGET_BUILD_DIR` from `xcodebuild -showBuildSettings` or the repo-controlled `.derived-data-device/Build/Products/Debug-iphoneos/OpenClient.app`
+
 Launch on device:
 
 ```bash

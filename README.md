@@ -69,6 +69,12 @@ Build for Simulator:
 xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj -scheme OpenCodeIOSClient -destination 'platform=iOS Simulator,name=iPhone 17' build
 ```
 
+Important:
+
+- do not install from a stale repo-local `DerivedData/Build/Products/...` path unless that folder was the explicit `-derivedDataPath` for the build you just ran
+- prefer either Xcode's real `TARGET_BUILD_DIR` or the repo-controlled `.derived-data-device/Build/Products/Debug-iphoneos/OpenClient.app`
+- the old product name `OpenCodeIOSClient.app` is stale and should not be used for install commands
+
 Open in Xcode:
 
 ```bash
