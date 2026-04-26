@@ -9,6 +9,8 @@ enum OpenClientScreenshotScene: String, CaseIterable {
     case chat
     case permission
     case question
+    case recentWidget = "recent-widget"
+    case pinnedWidget = "pinned-widget"
 
     static var current: OpenClientScreenshotScene? {
         guard let rawValue = ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] else {
@@ -37,7 +39,7 @@ extension AppViewModel {
             return screenshotChat()
         case .permission:
             return screenshotPermission()
-        case .question:
+        case .question, .recentWidget, .pinnedWidget:
             return screenshotQuestion()
         }
     }
@@ -316,5 +318,85 @@ enum OpenClientScreenshotData {
     )
 
     static let toolMessageDetails: [String: OpenCodeMessageEnvelope] = [toolMessage.id: toolMessage]
+
+    static let widgetServer = OpenCodeWidgetServerSnapshot(
+        id: secureConfig.recentServerID,
+        displayName: secureConfig.displayName,
+        baseURL: secureConfig.baseURL,
+        username: secureConfig.username,
+        generatedAt: Date(),
+        isLastConnected: true
+    )
+
+    static let recentWidgetSessions: [OpenCodeWidgetSessionSnapshot] = [
+        OpenCodeWidgetSessionSnapshot(
+            id: releaseSession.id,
+            serverID: secureConfig.recentServerID,
+            projectID: repoProject.id,
+            title: releaseSession.title ?? "Launch polish pass",
+            projectLabel: repoProject.name ?? "openclient",
+            directory: releaseSession.directory,
+            workspaceID: releaseSession.workspaceID,
+            status: .needsAction,
+            summaryKind: .permission,
+            summaryText: permission.summary,
+            updatedAt: Date().addingTimeInterval(-90),
+            lastActiveAt: Date().addingTimeInterval(-90),
+            isPinned: true,
+            pinOrder: 0
+        ),
+        OpenCodeWidgetSessionSnapshot(
+            id: followupSession.id,
+            serverID: secureConfig.recentServerID,
+            projectID: repoProject.id,
+            title: followupSession.title ?? "Live Activity routing",
+            projectLabel: repoProject.name ?? "openclient",
+            directory: followupSession.directory,
+            workspaceID: followupSession.workspaceID,
+            status: .working,
+            summaryKind: .snippet,
+            summaryText: sessionPreviews[followupSession.id]?.text ?? "Verified Live Activity routing.",
+            updatedAt: Date().addingTimeInterval(-1_200),
+            lastActiveAt: Date().addingTimeInterval(-1_200),
+            isPinned: false,
+            pinOrder: nil
+        ),
+        OpenCodeWidgetSessionSnapshot(
+            id: "session-screenshot-docs",
+            serverID: secureConfig.recentServerID,
+            projectID: docsProject.id,
+            title: "Product launch notes",
+            projectLabel: docsProject.name ?? "product-playbook",
+            directory: docsProject.worktree,
+            workspaceID: nil,
+            status: .needsAction,
+            summaryKind: .question,
+            summaryText: questionRequest.questions.first?.question ?? "Which screen should anchor the screenshots?",
+            updatedAt: Date().addingTimeInterval(-1_800),
+            lastActiveAt: Date().addingTimeInterval(-1_800),
+            isPinned: false,
+            pinOrder: nil
+        ),
+        OpenCodeWidgetSessionSnapshot(
+            id: archivedSession.id,
+            serverID: secureConfig.recentServerID,
+            projectID: repoProject.id,
+            title: archivedSession.title ?? "Screenshot automation",
+            projectLabel: repoProject.name ?? "openclient",
+            directory: archivedSession.directory,
+            workspaceID: archivedSession.workspaceID,
+            status: .ready,
+            summaryKind: .snippet,
+            summaryText: sessionPreviews[archivedSession.id]?.text ?? "Added deterministic screenshot scenes.",
+            updatedAt: Date().addingTimeInterval(-3_200),
+            lastActiveAt: Date().addingTimeInterval(-3_200),
+            isPinned: true,
+            pinOrder: 1
+        ),
+    ]
+
+    static var pinnedWidgetSessions: [OpenCodeWidgetSessionSnapshot] {
+        recentWidgetSessions.filter(\.isPinned).sorted { ($0.pinOrder ?? Int.max) < ($1.pinOrder ?? Int.max) }
+    }
 }
 #endif

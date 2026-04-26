@@ -37,6 +37,18 @@ struct ScreenshotSceneView: View {
             NavigationStack {
                 ChatView(viewModel: viewModel, sessionID: OpenClientScreenshotData.releaseSession.id)
             }
+        case .recentWidget:
+            WidgetScreenshotDashboardView(
+                title: "Recent Sessions",
+                serverName: OpenClientScreenshotData.widgetServer.displayName,
+                sessions: OpenClientScreenshotData.recentWidgetSessions
+            )
+        case .pinnedWidget:
+            WidgetScreenshotDashboardView(
+                title: "Pinned Sessions",
+                serverName: OpenClientScreenshotData.widgetServer.displayName,
+                sessions: OpenClientScreenshotData.pinnedWidgetSessions
+            )
         }
     }
 }

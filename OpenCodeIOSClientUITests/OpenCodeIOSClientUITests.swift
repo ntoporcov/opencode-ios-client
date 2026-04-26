@@ -33,6 +33,8 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             ("chat", "05-chat"),
             ("permission", "06-permission"),
             ("question", "07-question"),
+            ("recent-widget", "08-recent-widget"),
+            ("pinned-widget", "09-pinned-widget"),
         ]
 
         for (scene, screenshotName) in scenes {
