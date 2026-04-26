@@ -1,9 +1,5 @@
 import SwiftUI
 
-#if canImport(UniformTypeIdentifiers)
-import UniformTypeIdentifiers
-#endif
-
 struct SessionListView: View {
     @ObservedObject var viewModel: AppViewModel
     @Namespace private var sessionRowNamespace
@@ -14,22 +10,19 @@ struct SessionListView: View {
         let pinnedSessionIDs = viewModel.pinnedRootSessions.map(\.id).joined(separator: "|")
 
         List {
-            Section {
-                if viewModel.directoryState.isLoadingSessions && viewModel.sessions.isEmpty {
+            if viewModel.directoryState.isLoadingSessions && viewModel.sessions.isEmpty {
+                Section {
                     ForEach(0 ..< 3, id: \.self) { _ in
                         SessionRowSkeleton()
                             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
                     }
-                } else if viewModel.pinnedRootSessions.isEmpty {
-                    EmptyPinnedDropArea { sessionID in
-                        viewModel.insertPinnedSession(withID: sessionID, at: 0)
-                    }
-                    .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                } else {
+                } header: {
+                    SessionSectionHeader(title: "Pinned", systemImage: "pin")
+                }
+            } else if !viewModel.pinnedRootSessions.isEmpty {
+                Section {
                     ForEach(viewModel.pinnedRootSessions) { session in
                         pinnedSessionRow(for: session)
                             .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
@@ -37,14 +30,9 @@ struct SessionListView: View {
                             .listRowSeparator(.hidden)
                     }
                     .onMove(perform: movePinnedSessions)
-                    .onInsert(of: dropTypes, perform: insertPinnedSessions)
+                } header: {
+                    SessionSectionHeader(title: "Pinned", systemImage: "pin.fill", accessory: "\(viewModel.pinnedRootSessions.count)")
                 }
-            } header: {
-                SessionSectionHeader(
-                    title: "Pinned",
-                    systemImage: viewModel.pinnedRootSessions.isEmpty ? "pin" : "pin.fill",
-                    accessory: viewModel.pinnedRootSessions.isEmpty ? "Drag a chat here or use the menu" : "\(viewModel.pinnedRootSessions.count)"
-                )
             }
 
             Section {
@@ -109,14 +97,6 @@ struct SessionListView: View {
         }
     }
 
-    private func insertPinnedSessions(at index: Int, providers: [NSItemProvider]) {
-        _ = loadDroppedSessionID(from: providers) { sessionID in
-            withAnimation(opencodeSelectionAnimation) {
-                viewModel.insertPinnedSession(withID: sessionID, at: index)
-            }
-        }
-    }
-
     private func sessionRow(
         for session: OpenCodeSession,
         showsPinnedBadge: Bool = false,
@@ -164,11 +144,6 @@ struct SessionListView: View {
             } label: {
                 Label("Delete", systemImage: "trash")
             }
-        }
-        .onDrag {
-            NSItemProvider(object: session.id as NSString)
-        } preview: {
-            SessionDragOverlay(title: session.title ?? "Untitled Session")
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             Button {
@@ -236,27 +211,6 @@ private struct SessionRowSkeleton: View {
     }
 }
 
-private struct SessionDragOverlay: View {
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            SessionAvatar(title: title)
-
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: 240, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-}
-
 private struct SessionSectionHeader: View {
     let title: String
     let systemImage: String
@@ -277,70 +231,4 @@ private struct SessionSectionHeader: View {
         }
         .textCase(nil)
     }
-}
-
-private struct EmptyPinnedDropArea: View {
-    let onDropSession: @MainActor (String) -> Void
-    @State private var isTargeted = false
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "pin.circle")
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(isTargeted ? Color.blue : .secondary)
-
-            Text("Pin chats here")
-                .font(.subheadline.weight(.semibold))
-
-            Text("Hold and drag a chat into this area, or use the Pin action from the context menu.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 24)
-        .frame(maxWidth: .infinity)
-        .background(background, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(border, style: StrokeStyle(lineWidth: 1.5, dash: [7, 6]))
-        }
-        .onDrop(of: dropTypes, isTargeted: $isTargeted) { providers in
-            loadDroppedSessionID(from: providers) { sessionID in
-                withAnimation(opencodeSelectionAnimation) {
-                    onDropSession(sessionID)
-                }
-            }
-        }
-    }
-
-    private var background: Color {
-        isTargeted ? Color.blue.opacity(0.10) : Color.primary.opacity(0.03)
-    }
-
-    private var border: Color {
-        isTargeted ? Color.blue.opacity(0.55) : Color.primary.opacity(0.12)
-    }
-}
-
-private let dropTypes: [UTType] = [
-    .plainText,
-    .text,
-]
-
-@discardableResult
-private func loadDroppedSessionID(from providers: [NSItemProvider], perform: @MainActor @Sendable @escaping (String) -> Void) -> Bool {
-    guard let provider = providers.first(where: { $0.canLoadObject(ofClass: NSString.self) }) else {
-        return false
-    }
-
-    provider.loadObject(ofClass: NSString.self) { object, _ in
-        guard let sessionID = object as? NSString else { return }
-        let resolvedSessionID = String(sessionID)
-        Task { @MainActor in
-            perform(resolvedSessionID)
-        }
-    }
-
-    return true
 }
