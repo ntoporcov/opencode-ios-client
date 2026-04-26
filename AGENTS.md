@@ -396,32 +396,38 @@ This project is meant to be tested frequently on your iPhone.
 Build for simulator:
 
 ```bash
-xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj -scheme OpenCodeIOSClient -destination 'platform=iOS Simulator,name=iPhone 17' build
+xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj -scheme OpenCodeIOSClient -sdk iphonesimulator build
 ```
 
 Build for device:
 
 ```bash
-xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj -scheme OpenCodeIOSClient -destination 'id=<device-udid>' build
+xcodebuild -quiet -project OpenCodeIOSClient.xcodeproj -scheme OpenCodeIOSClient -sdk iphoneos build
 ```
 
 Install on device:
 
 ```bash
 xcrun devicectl device install app --device "<device-udid>" \
-  "<derived-data>/Build/Products/Debug-iphoneos/OpenCodeIOSClient.app"
+  "<derived-data>/Build/Products/Debug-iphoneos/OpenClient.app"
 ```
 
 Launch on device:
 
 ```bash
-xcrun devicectl device process launch --device "<device-udid>" com.ntoporcov.opencode-client
+xcrun devicectl device process launch --device "<device-udid>" com.ntoporcov.openclient
 ```
 
 Regenerate the Xcode project after adding/removing source files:
 
 ```bash
 xcodegen generate
+```
+
+Use the local signing override on this machine:
+
+```bash
+INCLUDE_PROJECT_LOCAL_YAML=1 xcodegen generate
 ```
 
 ### Practical Notes
@@ -439,6 +445,169 @@ xcrun xcdevice list
   - verify `Connect via network` in Xcode Devices and Simulators
 
 - Some installs succeed even if launch fails because the phone was locked; in that case, open the app manually on the device
+
+## Signing And IDs
+
+Validated current IDs:
+
+- main app: `com.ntoporcov.openclient`
+- Live Activity extension: `com.ntoporcov.openclient.liveactivity`
+
+Local signing setup now uses:
+
+- shared repo spec: `project.yml`
+- ignored local team override: `project.local.yml`
+
+Current local include pattern:
+
+```bash
+cp project.local.example.yml project.local.yml
+INCLUDE_PROJECT_LOCAL_YAML=1 xcodegen generate
+```
+
+Current entitlements/capabilities in use:
+
+- `OpenCodeIOSClient/OpenCodeIOSClient.entitlements`
+- `OpenCodeChatActivityExtension/OpenCodeChatActivityExtension.entitlements`
+- shared keychain access group: `$(AppIdentifierPrefix)com.ntoporcov.openclient.shared`
+
+Important App ID guidance:
+
+- use explicit App IDs, not wildcard IDs
+- create separate explicit IDs for app and extension targets
+- extension IDs are not separate App Store apps
+
+## Secrets And Local Storage
+
+Current release/security posture:
+
+- server passwords are stored in Keychain via `OpenCodeShared/OpenCodeServerPasswordStore.swift`
+- recent server metadata is stored separately from secrets
+- `fastlane/.env` is ignored by git and is the local place for App Store Connect credentials
+- `project.local.yml` is ignored by git and is the local place for personal signing overrides
+
+Current ASC env vars used locally:
+
+- `APP_STORE_CONNECT_API_KEY_ID`
+- `APP_STORE_CONNECT_ISSUER_ID`
+- one of:
+  - `APP_STORE_CONNECT_API_KEY_CONTENT`
+  - `APP_STORE_CONNECT_API_KEY_PATH`
+
+Fastlane was made tolerant of both being set locally, but it prefers `APP_STORE_CONNECT_API_KEY_CONTENT` if both exist.
+
+## Screenshots
+
+Validated screenshot pipeline:
+
+- screenshot mode is seeded in-app, not backend-driven
+- launch scene env var: `OPENCLIENT_SCREENSHOT_SCENE`
+- screenshot UI test: `OpenCodeIOSClientUITests.testAppStoreScreenshots()`
+- screenshot-only scheme: `OpenCodeIOSClientScreenshots`
+- screenshot output folder: `fastlane/screenshots/en_US/`
+
+Current screenshot scenes:
+
+- `connection`
+- `recent-servers`
+- `projects`
+- `sessions`
+- `chat`
+- `permission`
+- `question`
+
+Current validated capture devices:
+
+- `iPhone 17 Pro`
+- `iPhone 17 Pro Max`
+- `iPad Pro 13-inch (M5)`
+
+Current one-command screenshot flow:
+
+```bash
+fastlane ios screenshots
+```
+
+Important note:
+
+- the repo no longer depends on `fastlane snapshot`'s helper flow for screenshots
+- the `screenshots` lane runs deterministic `xcodebuild test` per simulator and writes PNGs directly into `fastlane/screenshots/`
+
+## Fastlane And ASC
+
+Validated lanes:
+
+- `fastlane ios build`
+- `fastlane ios archive`
+- `fastlane ios metadata_check`
+- `fastlane ios metadata`
+- `fastlane ios beta`
+- `fastlane ios screenshots`
+
+Important fastlane/version quirks discovered:
+
+- this installed fastlane version does not support `deliver(download_metadata: true)` through the action API
+- to pull live metadata, use the CLI subcommand pattern instead:
+
+```bash
+fastlane deliver download_metadata ...
+```
+
+- `precheck` with API keys must disable IAP checks for this app:
+  - `include_in_app_purchases: false`
+
+Current metadata/ASC validation status:
+
+- `fastlane ios metadata_check` passes
+- `fastlane ios beta` successfully uploaded the first TestFlight build
+
+Current App Store metadata lives in:
+
+- `fastlane/metadata/`
+
+Current marketing/privacy site lives in:
+
+- `docs/index.html`
+- `docs/privacy/index.html`
+
+## TestFlight Notes
+
+Validated first-TestFlight blockers and fixes:
+
+- preview-only Swift files must be fully wrapped in `#if DEBUG` or Release archive builds fail
+- automatic provisioning updates were needed during export for app + Live Activity extension
+- App Store upload rejected the app until `UISupportedInterfaceOrientations` and `UISupportedInterfaceOrientations~ipad` were added to the generated plist
+
+Current upload/export behavior in fastlane:
+
+- archive/export uses automatic signing
+- export allows provisioning updates
+- TestFlight upload uses `uses_non_exempt_encryption: false`
+
+Current binary compliance posture:
+
+- `ITSAppUsesNonExemptEncryption: false` is set in the generated app plist
+
+## App Store Connect Reality
+
+What is now automated well:
+
+- metadata validation via `fastlane ios metadata_check`
+- metadata upload via `fastlane ios metadata`
+- TestFlight upload via `fastlane ios beta`
+- deterministic screenshot generation in-repo
+
+What still remains manual in ASC:
+
+- App Privacy answers
+- age rating
+- some reviewer notes / review info
+- any first-time store UI fields Apple does not expose cleanly via fastlane
+
+Important nuance:
+
+- installed app name can remain `OpenClient`
+- App Store listing name must still be unique across App Store Connect
 
 ### Release Mindset
 
