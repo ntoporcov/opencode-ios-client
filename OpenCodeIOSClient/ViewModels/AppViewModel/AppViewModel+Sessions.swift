@@ -120,6 +120,8 @@ extension AppViewModel {
         if hasGitProject {
             await reloadGitViewData(force: true)
         }
+
+        publishWidgetSnapshots()
     }
 
     func reloadSessionStatuses() async throws {
@@ -649,6 +651,7 @@ extension AppViewModel {
                 directoryState.permissions.removeAll { $0.id == permission.id }
             }
             refreshLiveActivityIfNeeded(for: permission.sessionID)
+            publishWidgetSnapshots()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -659,6 +662,7 @@ extension AppViewModel {
             directoryState.permissions.removeAll { $0.id == permission.id }
         }
         refreshLiveActivityIfNeeded(for: permission.sessionID)
+        publishWidgetSnapshots()
     }
 
     func respondToQuestion(_ request: OpenCodeQuestionRequest, answers: [[String]]) async {
@@ -675,6 +679,7 @@ extension AppViewModel {
                 directoryState.questions.removeAll { $0.id == request.id }
             }
             refreshLiveActivityIfNeeded(for: request.sessionID)
+            publishWidgetSnapshots()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -692,6 +697,7 @@ extension AppViewModel {
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.questions.removeAll { $0.id == request.id }
             }
+            publishWidgetSnapshots()
         } catch {
             errorMessage = error.localizedDescription
         }

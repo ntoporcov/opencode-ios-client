@@ -460,11 +460,13 @@ extension AppViewModel {
     func setSessionPreview(_ preview: SessionPreview, for sessionID: String) {
         sessionPreviews[sessionID] = preview
         persistSessionPreviews()
+        publishWidgetSnapshots()
     }
 
     func removeSessionPreview(for sessionID: String) {
         sessionPreviews[sessionID] = nil
         persistSessionPreviews()
+        removeWidgetSessionSnapshot(for: sessionID)
     }
 
     func isSessionPinned(_ session: OpenCodeSession) -> Bool {
@@ -532,6 +534,7 @@ extension AppViewModel {
         }
 
         persistPinnedSessionIDsByScope()
+        publishWidgetSnapshots()
     }
 
     func setLiveActivityAutoStartEnabled(_ isEnabled: Bool, for scopeKey: String? = nil) {

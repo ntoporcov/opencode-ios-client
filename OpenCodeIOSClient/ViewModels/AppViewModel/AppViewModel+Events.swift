@@ -238,6 +238,7 @@ extension AppViewModel {
         }
 
         refreshLiveActivityIfNeeded(for: managedEventSessionID(for: managed))
+        publishWidgetSnapshots()
     }
 
     private func shouldApplyDirectoryEvent(from managed: OpenCodeManagedEvent) -> Bool {
