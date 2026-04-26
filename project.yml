@@ -48,6 +48,13 @@ targets:
     dependencies:
       - target: OpenCodeChatActivityExtension
         embed: true
+    preBuildScripts:
+      - name: Validate bundle identifier
+        script: |
+          if [ "$PRODUCT_BUNDLE_IDENTIFIER" != "com.ntoporcov.openclient" ]; then
+            echo "error: Unexpected app bundle identifier '$PRODUCT_BUNDLE_IDENTIFIER'. Regenerate the project from project.yml before building."
+            exit 1
+          fi
     info:
       path: OpenCodeIOSClient/Generated-Info.plist
       properties:
@@ -98,6 +105,13 @@ targets:
         excludes:
           - Info.plist
       - path: OpenCodeShared
+    preBuildScripts:
+      - name: Validate bundle identifier
+        script: |
+          if [ "$PRODUCT_BUNDLE_IDENTIFIER" != "com.ntoporcov.openclient.liveactivity" ]; then
+            echo "error: Unexpected extension bundle identifier '$PRODUCT_BUNDLE_IDENTIFIER'. Regenerate the project from project.yml before building."
+            exit 1
+          fi
     info:
       path: OpenCodeChatActivityExtension/Info.plist
       properties:
