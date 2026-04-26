@@ -52,12 +52,8 @@ struct ChatView: View {
     @State private var animatingOutgoingMessageID: String?
     @State private var listViewportHeight: CGFloat = 0
     @State private var bottomAnchorFrame: CGRect = .zero
-    @State private var immediateScrollToken = 0
     @State private var needsInitialBottomSnap = true
-    @State private var keyboardHeight: CGFloat = 0
-    @State private var shouldAdjustForKeyboard = false
     @State private var hasCompletedInitialHydrationSnap = false
-    @State private var keyboardAnimationDuration: Double = 0.25
     @State private var composerOverlayHeight: CGFloat = 0
     @State private var shouldFollowComposerAffordanceChange = false
     @State private var affordanceScrollTask: Task<Void, Never>?
@@ -67,6 +63,7 @@ struct ChatView: View {
     @State private var loadingIndicatorTask: Task<Void, Never>?
     @State private var shouldShowLoadingIndicator = false
     @State private var chatContentOffsetY: CGFloat = 14
+    @State private var isScrollGeometryAtBottom = true
 
     @State private var selectedInstructionTab: AppleIntelligenceInstructionTab = .user
 
@@ -144,12 +141,13 @@ struct ChatView: View {
         return abs(bottomAnchorFrame.minY - listViewportHeight) <= 140
     }
 
-    private var isLoadingSelectedSession: Bool {
-        viewModel.selectedSession?.id == sessionID && viewModel.directoryState.isLoadingSelectedSession && viewModel.messages.isEmpty
+    private var isPinnedToBottom: Bool {
+        guard listViewportHeight > 0, bottomAnchorFrame != .zero else { return false }
+        return bottomAnchorFrame.minY <= listViewportHeight + 8 && bottomAnchorFrame.maxY >= listViewportHeight - 72
     }
 
-    private var effectiveBottomPadding: CGFloat {
-        max(messageBottomPadding, composerOverlayHeight + 12) + (shouldAdjustForKeyboard ? keyboardHeight : 0)
+    private var isLoadingSelectedSession: Bool {
+        viewModel.selectedSession?.id == sessionID && viewModel.directoryState.isLoadingSelectedSession && viewModel.messages.isEmpty
     }
 
     private var shouldAnimateInitialChatReveal: Bool {
@@ -173,8 +171,11 @@ struct ChatView: View {
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .bottom) {
+        ZStack {
+            OpenCodePlatformColor.groupedBackground
+                .ignoresSafeArea()
+
+            GeometryReader { geometry in
                 ScrollViewReader { proxy in
                     List {
                         if hiddenMessageCount > 0 {
@@ -207,21 +208,10 @@ struct ChatView: View {
                             thinkingRowListItem
                         }
 
-                        Color.clear
-                            .frame(maxWidth: .infinity)
-                            .frame(height: max(1, effectiveBottomPadding))
-                            .background {
-                                GeometryReader { anchorGeometry in
-                                    Color.clear
-                                        .preference(key: ChatBottomAnchorFramePreferenceKey.self, value: anchorGeometry.frame(in: .named("chat-view-space")))
-                                }
-                            }
-                            .id("chat-bottom-anchor")
-                            .listRowInsets(EdgeInsets())
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
+                    bottomAnchorListItem
                     }
                     .listStyle(.plain)
+                    .chatScrollBottomTracking($isScrollGeometryAtBottom)
                     .animation(.snappy(duration: 0.28, extraBounce: 0.02), value: listAnimationSignature)
                     .scrollContentBackground(.hidden)
                     .opencodeInteractiveKeyboardDismiss()
@@ -258,39 +248,19 @@ struct ChatView: View {
                     }
                     .onChange(of: geometry.size.height) { _, height in
                         listViewportHeight = height
-                    }
-                    .onChange(of: keyboardHeight) { oldHeight, newHeight in
-                        if newHeight <= 0 {
-                            shouldAdjustForKeyboard = false
-                            return
-                        }
-
-                        if oldHeight <= 0 {
-                            shouldAdjustForKeyboard = isNearBottom
-                        }
-
-                        guard newHeight > oldHeight, shouldAdjustForKeyboard else { return }
-                        scheduleScrollToBottom(with: proxy, delayMS: 40, animated: true)
-                    }
-                    .onChange(of: immediateScrollToken) { _, _ in
-                        scheduleScrollToBottom(with: proxy)
+                        guard isNearBottom else { return }
+                        scheduleScrollToBottom(with: proxy, delayMS: 20)
                     }
                     .onChange(of: composerOverlayHeight) { oldHeight, newHeight in
                         guard newHeight > 0, abs(newHeight - oldHeight) > 1 else { return }
                         if needsInitialComposerHeightSnap, !viewModel.messages.isEmpty {
                             needsInitialComposerHeightSnap = false
-                            scheduleScrollToBottom(with: proxy, delayMS: 60)
+                            scheduleComposerAffordanceFollow(with: proxy, delayMS: 60)
                             return
                         }
                         guard shouldFollowComposerAffordanceChange || isNearBottom else { return }
                         shouldFollowComposerAffordanceChange = false
-                        affordanceScrollTask?.cancel()
-                        affordanceScrollTask = Task { @MainActor in
-                            scheduleScrollToBottom(with: proxy, delayMS: 20)
-                            try? await Task.sleep(for: .milliseconds(140))
-                            guard !Task.isCancelled else { return }
-                            scheduleScrollToBottom(with: proxy, delayMS: 0)
-                        }
+                        scheduleComposerAffordanceFollow(with: proxy, delayMS: 20)
                     }
                     .onChange(of: viewModel.messages.count) { oldCount, count in
                         if !hasLoadedInitialWindow {
@@ -329,20 +299,17 @@ struct ChatView: View {
                     }
 #if canImport(UIKit)
                     .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-                        keyboardHeight = keyboardHeight(from: notification, containerFrame: geometry.frame(in: .global))
-                    }
-                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                        keyboardHeight = 0
-                        shouldAdjustForKeyboard = false
+                        guard keyboardWillShow(from: notification), isScrollGeometryAtBottom else { return }
+                        scheduleComposerAffordanceFollow(with: proxy, delayMS: 20)
                     }
 #endif
                 }
-
-                composerOverlay
             }
         }
         .coordinateSpace(name: "chat-view-space")
-        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            composerOverlay
+        }
         .navigationTitle(isChildSession ? childSessionTitle : (liveSession.title ?? "Session"))
         .opencodeInlineNavigationTitle()
         .onAppear {
@@ -551,8 +518,23 @@ struct ChatView: View {
 
     private var composerOverlay: some View {
         measuredComposerStack
-            .padding(.bottom, keyboardHeight)
             .background(Color.clear)
+    }
+
+    private var bottomAnchorListItem: some View {
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: messageBottomPadding)
+            .background {
+                GeometryReader { anchorGeometry in
+                    Color.clear
+                        .preference(key: ChatBottomAnchorFramePreferenceKey.self, value: anchorGeometry.frame(in: .named("chat-view-space")))
+                }
+            }
+            .id("chat-bottom-anchor")
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
     }
 
     private var measuredComposerStack: some View {
@@ -583,7 +565,7 @@ struct ChatView: View {
 
     private func scrollToBottom(with proxy: ScrollViewProxy, animated: Bool) {
         if animated {
-            withAnimation(.easeOut(duration: keyboardAnimationDuration)) {
+            withAnimation(.easeOut(duration: 0.24)) {
                 proxy.scrollTo("chat-bottom-anchor", anchor: .bottom)
             }
         } else {
@@ -591,7 +573,17 @@ struct ChatView: View {
         }
     }
 
-    private var messageBottomPadding: CGFloat { 96 }
+    private func scheduleComposerAffordanceFollow(with proxy: ScrollViewProxy, delayMS: Int) {
+        affordanceScrollTask?.cancel()
+        affordanceScrollTask = Task { @MainActor in
+            scheduleScrollToBottom(with: proxy, delayMS: delayMS)
+            try? await Task.sleep(for: .milliseconds(140))
+            guard !Task.isCancelled else { return }
+            scheduleScrollToBottom(with: proxy, delayMS: 0)
+        }
+    }
+
+    private var messageBottomPadding: CGFloat { 20 }
 
     private var displayedMessages: ArraySlice<OpenCodeMessageEnvelope> {
         viewModel.messages.suffix(visibleMessageCount)
@@ -730,7 +722,6 @@ struct ChatView: View {
 
         shouldSnapOnNextMessage = true
         shouldDelayNextUserInsertScroll = true
-        immediateScrollToken += 1
 
         let shouldAnimateBubble = !draftText.isEmpty && !hasAttachments
         let preparedIDs = shouldAnimateBubble
@@ -810,16 +801,9 @@ struct ChatView: View {
     }
 
 #if canImport(UIKit)
-    private func keyboardHeight(from notification: Notification, containerFrame: CGRect) -> CGFloat {
-        if let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double {
-            keyboardAnimationDuration = duration
-        }
-
-        guard let value = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
-            return 0
-        }
-
-        return max(0, containerFrame.maxY - value.minY)
+    private func keyboardWillShow(from notification: Notification) -> Bool {
+        guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return false }
+        return frame.minY < UIScreen.main.bounds.height
     }
 #endif
 
@@ -1065,5 +1049,24 @@ private struct ComposerOverlayHeightPreferenceKey: PreferenceKey {
 
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func chatScrollBottomTracking(_ isAtBottom: Binding<Bool>) -> some View {
+#if os(iOS) || targetEnvironment(macCatalyst)
+        if #available(iOS 18.0, *) {
+            self.onScrollGeometryChange(for: Bool.self) { geometry in
+                geometry.visibleRect.maxY >= geometry.contentSize.height - 80
+            } action: { _, newValue in
+                isAtBottom.wrappedValue = newValue
+            }
+        } else {
+            self
+        }
+#else
+        self
+#endif
     }
 }
