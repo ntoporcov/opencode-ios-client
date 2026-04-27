@@ -14,9 +14,13 @@ struct RootView: View {
                         }
                     }
                 } content: {
-                    ProjectContentView(viewModel: viewModel) {
-                        withAnimation(opencodeSelectionAnimation) {
-                            preferredCompactColumn = .detail
+                    if viewModel.currentProject == nil {
+                        ContentUnavailableView("Select a Project", systemImage: "folder")
+                    } else {
+                        ProjectContentView(viewModel: viewModel) {
+                            withAnimation(opencodeSelectionAnimation) {
+                                preferredCompactColumn = .detail
+                            }
                         }
                     }
                 } detail: {
@@ -55,6 +59,12 @@ struct RootView: View {
                     ConnectionView(viewModel: viewModel)
                 }
             }
+        }
+        .sheet(item: $viewModel.paywallReason) { reason in
+            OpenClientPaywallView(viewModel: viewModel, purchaseManager: viewModel.purchaseManager, reason: reason)
+        }
+        .onChange(of: viewModel.isConnected) { _, _ in
+            preferredCompactColumn = .sidebar
         }
         .animation(opencodeSelectionAnimation, value: viewModel.hasActiveWorkspace)
     }

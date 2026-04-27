@@ -399,6 +399,14 @@ struct OpenCodeComposerAttachment: Identifiable, Hashable, Sendable {
     }
 }
 
+struct OpenCodeMessageDraft: Codable, Equatable, Sendable {
+    var text: String
+
+    var isEmpty: Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
 struct OpenCodeForkableMessage: Identifiable, Hashable, Sendable {
     let id: String
     let text: String

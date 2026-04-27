@@ -81,6 +81,7 @@ extension AppViewModel {
 
     func presentGitView() {
         guard hasGitProject else { return }
+        preserveCurrentMessageDraftForNavigation()
         withAnimation(opencodeSelectionAnimation) {
             selectedProjectContentTab = .git
             directoryState.selectedSession = nil
@@ -121,6 +122,7 @@ extension AppViewModel {
     }
 
     func selectVCSFile(_ path: String) {
+        preserveCurrentMessageDraftForNavigation()
         withAnimation(opencodeSelectionAnimation) {
             selectedProjectContentTab = .git
             directoryState.selectedSession = nil
@@ -131,6 +133,7 @@ extension AppViewModel {
 
     func selectProjectFile(_ node: OpenCodeFileNode) {
         guard !node.isDirectory else { return }
+        preserveCurrentMessageDraftForNavigation()
 
         withAnimation(opencodeSelectionAnimation) {
             selectedProjectContentTab = .git

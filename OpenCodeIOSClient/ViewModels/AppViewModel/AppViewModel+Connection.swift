@@ -55,9 +55,9 @@ extension AppViewModel {
             persistConfigAfterSuccessfulConnection()
             loadNewSessionDefaults()
             projects = bootstrap.projects
-            selectedDirectory = directorySelection(for: bootstrap.currentProject)
+            currentProject = nil
+            selectedDirectory = nil
             selectedProjectContentTab = .sessions
-            reconcileCurrentProjectSelection(serverProject: bootstrap.currentProject)
             try await reloadSessions()
             await loadComposerOptions()
             streamDirectory = directoryState.sessions.first?.directory
@@ -144,6 +144,7 @@ extension AppViewModel {
 
     func leaveAppleIntelligenceSession() {
         appleIntelligenceResponseTask?.cancel()
+        preserveCurrentMessageDraftForNavigation()
         stopAccessingActiveAppleIntelligenceWorkspace()
         currentAppleIntelligenceWorkspace = nil
         backendMode = .none
@@ -242,8 +243,7 @@ extension AppViewModel {
             sessionStatuses: [workspace.session.id: "idle"]
         )
         draftTitle = ""
-        draftMessage = ""
-        clearDraftAttachments()
+        restoreMessageDraft(for: workspace.session)
         errorMessage = nil
     }
 
@@ -534,6 +534,7 @@ extension AppViewModel {
             let session = try await client.createSession(title: title, directory: effectiveSelectedDirectory)
             upsertVisibleSession(session)
             directoryState.selectedSession = session
+            restoreMessageDraft(for: session)
             try await loadMessages(for: session)
             try await client.sendMessageAsync(sessionID: session.id, text: prompt, directory: sendDirectory(for: session))
             try await loadMessages(for: session)

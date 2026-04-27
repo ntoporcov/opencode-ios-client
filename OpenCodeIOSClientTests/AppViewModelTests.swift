@@ -3,6 +3,106 @@ import XCTest
 
 @MainActor
 final class AppViewModelTests: XCTestCase {
+    override func setUp() {
+        super.setUp()
+        UserDefaults.standard.removeObject(forKey: AppViewModel.StorageKey.messageDraftsByChat)
+    }
+
+    override func tearDown() {
+        UserDefaults.standard.removeObject(forKey: AppViewModel.StorageKey.messageDraftsByChat)
+        super.tearDown()
+    }
+
+    func testMessageDraftRestoresPerSession() {
+        let viewModel = AppViewModel()
+        let first = OpenCodeSession(id: "ses_first", title: "First", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+        let second = OpenCodeSession(id: "ses_second", title: "Second", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+
+        viewModel.directoryState.selectedSession = first
+        viewModel.draftMessage = "first draft"
+        viewModel.persistCurrentMessageDraft()
+
+        viewModel.directoryState.selectedSession = second
+        viewModel.draftMessage = "second draft"
+        viewModel.persistCurrentMessageDraft()
+
+        viewModel.restoreMessageDraft(for: first)
+        XCTAssertEqual(viewModel.draftMessage, "first draft")
+
+        viewModel.restoreMessageDraft(for: second)
+        XCTAssertEqual(viewModel.draftMessage, "second draft")
+    }
+
+    func testMessageDraftPersistsAcrossViewModels() {
+        let viewModel = AppViewModel()
+        let session = OpenCodeSession(id: "ses_persisted", title: "Persisted", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+
+        viewModel.directoryState.selectedSession = session
+        viewModel.draftMessage = "persist me"
+        viewModel.persistCurrentMessageDraft()
+
+        let restored = AppViewModel()
+        restored.restoreMessageDraft(for: session)
+
+        XCTAssertEqual(restored.draftMessage, "persist me")
+        XCTAssertEqual(restored.draftAttachments, [])
+    }
+
+    func testMessageDraftIndicatorIgnoresWhitespaceDraft() {
+        let viewModel = AppViewModel()
+        let session = OpenCodeSession(id: "ses_empty_draft", title: "Empty", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+
+        viewModel.directoryState.selectedSession = session
+        viewModel.draftMessage = "   \n"
+        viewModel.persistCurrentMessageDraft()
+
+        XCTAssertFalse(viewModel.hasMessageDraft(for: session))
+    }
+
+    func testMessageDraftCanRestoreAfterEmptyComposerRace() {
+        let viewModel = AppViewModel()
+        let session = OpenCodeSession(id: "ses_race", title: "Race", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+
+        viewModel.directoryState.selectedSession = session
+        viewModel.draftMessage = "saved draft"
+        viewModel.persistCurrentMessageDraft()
+        viewModel.draftMessage = ""
+
+        viewModel.restoreMessageDraftIfComposerIsEmpty(for: session)
+
+        XCTAssertEqual(viewModel.draftMessage, "saved draft")
+    }
+
+    func testNavigationPreserveDoesNotEraseStoredDraftWhenComposerIsEmpty() {
+        let viewModel = AppViewModel()
+        let first = OpenCodeSession(id: "ses_first", title: "First", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+        let second = OpenCodeSession(id: "ses_second", title: "Second", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+
+        viewModel.directoryState.selectedSession = first
+        viewModel.draftMessage = "saved draft"
+        viewModel.persistCurrentMessageDraft()
+
+        viewModel.draftMessage = ""
+        viewModel.prepareSessionSelection(second)
+
+        XCTAssertTrue(viewModel.hasMessageDraft(for: first))
+    }
+
+    func testStaleChatBindingCannotErasePreviousSessionDraft() {
+        let viewModel = AppViewModel()
+        let first = OpenCodeSession(id: "ses_first", title: "First", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+        let second = OpenCodeSession(id: "ses_second", title: "Second", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+
+        viewModel.directoryState.selectedSession = first
+        viewModel.setDraftMessage("saved draft", forSessionID: first.id)
+        viewModel.prepareSessionSelection(second)
+
+        viewModel.setDraftMessage("", forSessionID: first.id)
+
+        XCTAssertTrue(viewModel.hasMessageDraft(for: first))
+        XCTAssertEqual(viewModel.messageDraftsByChatKey[viewModel.messageDraftStorageKey(for: first)]?.text, "saved draft")
+    }
+
     func testSendDirectoryPrefersSelectedWorkspaceScope() {
         let viewModel = AppViewModel()
         let session = OpenCodeSession(

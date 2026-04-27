@@ -26,6 +26,87 @@ extension AppViewModel {
         }
     }
 
+    func messageDraftStorageKey(for session: OpenCodeSession) -> String {
+        messageDraftStorageKey(forSessionID: session.id)
+    }
+
+    func messageDraftStorageKey(forSessionID sessionID: String) -> String {
+        let scope: String
+        if isUsingAppleIntelligence {
+            scope = ["apple-intelligence", activeAppleIntelligenceWorkspaceID ?? "global"].joined(separator: "|")
+        } else {
+            scope = ["opencode", NewSessionDefaultsStore.normalizedBaseURL(config.baseURL) ?? config.baseURL].joined(separator: "|")
+        }
+
+        return [scope, sessionID].joined(separator: "|")
+    }
+
+    func restoreMessageDraft(for session: OpenCodeSession) {
+        let draft = messageDraftsByChatKey[messageDraftStorageKey(for: session)]
+        draftMessage = draft?.text ?? ""
+        draftAttachments = []
+        composerResetToken = UUID()
+    }
+
+    func setDraftMessage(_ text: String, forSessionID sessionID: String) {
+        guard selectedSession?.id == sessionID else { return }
+        draftMessage = text
+        persistCurrentMessageDraft(forSessionID: sessionID)
+    }
+
+    func hasMessageDraft(for session: OpenCodeSession) -> Bool {
+        if selectedSession?.id == session.id,
+           !draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return true
+        }
+
+        return messageDraftsByChatKey[messageDraftStorageKey(for: session)]?.isEmpty == false
+    }
+
+    func restoreMessageDraftIfComposerIsEmpty(for session: OpenCodeSession) {
+        guard selectedSession?.id == session.id else { return }
+        guard draftMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        guard let draft = messageDraftsByChatKey[messageDraftStorageKey(for: session)], !draft.isEmpty else { return }
+
+        draftMessage = draft.text
+        draftAttachments = []
+        composerResetToken = UUID()
+    }
+
+    func persistCurrentMessageDraft(forSessionID sessionID: String? = nil, removesEmpty: Bool = true) {
+        guard let sessionID = sessionID ?? selectedSession?.id else { return }
+
+        let key = messageDraftStorageKey(forSessionID: sessionID)
+        let draft = OpenCodeMessageDraft(text: draftMessage)
+        if draft.isEmpty {
+            guard removesEmpty else { return }
+            messageDraftsByChatKey.removeValue(forKey: key)
+        } else {
+            messageDraftsByChatKey[key] = draft
+        }
+        saveMessageDraftsByChatKey(messageDraftsByChatKey)
+    }
+
+    func preserveCurrentMessageDraftForNavigation(forSessionID sessionID: String? = nil) {
+        persistCurrentMessageDraft(forSessionID: sessionID, removesEmpty: false)
+    }
+
+    func clearPersistedMessageDraft(forSessionID sessionID: String? = nil) {
+        guard let sessionID = sessionID ?? selectedSession?.id else { return }
+        messageDraftsByChatKey.removeValue(forKey: messageDraftStorageKey(forSessionID: sessionID))
+        saveMessageDraftsByChatKey(messageDraftsByChatKey)
+    }
+
+    func loadMessageDraftsByChatKey() -> [String: OpenCodeMessageDraft] {
+        guard let data = UserDefaults.standard.data(forKey: StorageKey.messageDraftsByChat) else { return [:] }
+        return (try? JSONDecoder().decode([String: OpenCodeMessageDraft].self, from: data)) ?? [:]
+    }
+
+    func saveMessageDraftsByChatKey(_ drafts: [String: OpenCodeMessageDraft]) {
+        guard let data = try? JSONEncoder().encode(drafts) else { return }
+        UserDefaults.standard.set(data, forKey: StorageKey.messageDraftsByChat)
+    }
+
     var selectableAgents: [OpenCodeAgent] {
         availableAgents
             .filter { ($0.hidden ?? false) == false && $0.mode != "subagent" }

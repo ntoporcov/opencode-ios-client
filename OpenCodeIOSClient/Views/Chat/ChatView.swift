@@ -78,10 +78,17 @@ struct ChatView: View {
     @State private var shouldShowLoadingIndicator = false
     @State private var chatContentOffsetY: CGFloat = 14
     @State private var isScrollGeometryAtBottom = true
+    @State private var isRefreshingChatData = false
+    @State private var bottomPullDistance: CGFloat = 0
+    @State private var bottomPullStartedAtBottom = false
+    @State private var bottomPullIsTracking = false
+    @State private var hasFiredBottomPullHaptic = false
 
     @State private var selectedInstructionTab: AppleIntelligenceInstructionTab = .user
 
     private let messageWindowSize = 10
+    private let bottomRefreshThreshold: CGFloat = 72
+    private let bottomRefreshIndicatorHeight: CGFloat = 34
     private var todoIDs: String {
         viewModel.todos.map { $0.id }.joined(separator: "|")
     }
@@ -216,6 +223,7 @@ struct ChatView: View {
                     }
                     .listStyle(.plain)
                     .chatScrollBottomTracking($isScrollGeometryAtBottom)
+                    .simultaneousGesture(bottomOverscrollRefreshGesture)
                     .animation(.snappy(duration: 0.28, extraBounce: 0.02), value: listAnimationSignature)
                     .scrollContentBackground(.hidden)
                     .opencodeInteractiveKeyboardDismiss()
@@ -415,6 +423,15 @@ struct ChatView: View {
         }
     }
 
+    private var draftTextBinding: Binding<String> {
+        Binding(
+            get: { viewModel.draftMessage },
+            set: { newValue in
+                viewModel.setDraftMessage(newValue, forSessionID: sessionID)
+            }
+        )
+    }
+
     private var composerStack: some View {
         VStack(spacing: 6) {
             if viewModel.todos.contains(where: { !$0.isComplete }) || !viewModel.draftAttachments.isEmpty {
@@ -471,45 +488,51 @@ struct ChatView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                 } else {
-                    MessageComposer(
-                        text: $viewModel.draftMessage,
-                        isAccessoryMenuOpen: $isComposerMenuOpen,
-                        commands: viewModel.commands,
-                        attachmentCount: viewModel.draftAttachments.count,
-                        isBusy: isBusy,
-                        canFork: !viewModel.forkableMessages.isEmpty,
-                        onInputFrameChange: { _ in },
-                        onSend: {
-                            startOutgoingBubbleAnimationAndSend()
-                        },
-                        onStop: {
-                            stopComposerAction()
-                        },
-                        onSelectCommand: { command in
-                            if viewModel.isForkClientCommand(command) {
-                                viewModel.draftMessage = ""
-                                viewModel.presentForkSessionSheet()
-                                return
-                            }
-                            shouldSnapOnNextMessage = true
-                            Task { await viewModel.sendCommand(command, sessionID: sessionID, userVisible: true) }
-                        },
-                        onOpenFork: {
-                            viewModel.presentForkSessionSheet()
-                        },
-                        onAddAttachments: { attachments in
-                            viewModel.addDraftAttachments(attachments)
-                        }
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(.clear)
+                    activeMessageComposer(isBusy: isBusy)
                 }
             }
         }
         .transaction { transaction in
             transaction.animation = nil
         }
+    }
+
+    private func activeMessageComposer(isBusy: Bool) -> some View {
+        MessageComposer(
+            text: draftTextBinding,
+            isAccessoryMenuOpen: $isComposerMenuOpen,
+            commands: viewModel.commands,
+            attachmentCount: viewModel.draftAttachments.count,
+            isBusy: isBusy,
+            canFork: !viewModel.forkableMessages.isEmpty,
+            onInputFrameChange: { _ in },
+            onSend: {
+                startOutgoingBubbleAnimationAndSend()
+            },
+            onStop: {
+                stopComposerAction()
+            },
+            onSelectCommand: { command in
+                if viewModel.isForkClientCommand(command) {
+                    viewModel.draftMessage = ""
+                    viewModel.clearPersistedMessageDraft(forSessionID: sessionID)
+                    viewModel.presentForkSessionSheet()
+                    return
+                }
+                guard viewModel.reserveUserPromptIfAllowed() else { return }
+                shouldSnapOnNextMessage = true
+                Task { await viewModel.sendCommand(command, sessionID: sessionID, userVisible: true, meterPrompt: false) }
+            },
+            onOpenFork: {
+                viewModel.presentForkSessionSheet()
+            },
+            onAddAttachments: { attachments in
+                viewModel.addDraftAttachments(attachments)
+            }
+        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.clear)
     }
 
     private var childSessionComposerNotice: some View {
@@ -546,9 +569,13 @@ struct ChatView: View {
     }
 
     private var bottomAnchorListItem: some View {
-        Color.clear
-            .frame(maxWidth: .infinity)
-            .frame(height: messageBottomPadding)
+        VStack(spacing: 8) {
+            if shouldShowBottomRefreshIndicator {
+                bottomRefreshIndicator
+            }
+        }
+        .frame(maxWidth: .infinity)
+            .frame(height: messageBottomPadding + bottomRefreshIndicatorHeight * bottomPullProgress)
             .background {
                 GeometryReader { anchorGeometry in
                     Color.clear
@@ -559,6 +586,34 @@ struct ChatView: View {
             .listRowInsets(EdgeInsets())
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
+    }
+
+    private var shouldShowBottomRefreshIndicator: Bool {
+        isRefreshingChatData || bottomPullDistance > 1
+    }
+
+    private var bottomPullProgress: CGFloat {
+        if isRefreshingChatData { return 1 }
+        return min(1, bottomPullDistance / bottomRefreshThreshold)
+    }
+
+    private var bottomRefreshIndicator: some View {
+        Group {
+            if isRefreshingChatData {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(bottomPullProgress >= 1 ? .blue : .secondary)
+            }
+        }
+        .frame(width: 28, height: 28)
+        .scaleEffect(0.55 + 0.45 * bottomPullProgress)
+        .opacity(0.25 + 0.75 * bottomPullProgress)
+        .animation(.snappy(duration: 0.18, extraBounce: 0.02), value: bottomPullProgress)
+        .animation(.easeOut(duration: 0.12), value: isRefreshingChatData)
+        .transition(.opacity.combined(with: .scale(scale: 0.86)))
     }
 
     private var measuredComposerStack: some View {
@@ -605,6 +660,61 @@ struct ChatView: View {
             guard !Task.isCancelled else { return }
             scheduleScrollToBottom(with: proxy, delayMS: 0)
         }
+    }
+
+    private var bottomOverscrollRefreshGesture: some Gesture {
+        DragGesture(minimumDistance: 8, coordinateSpace: .local)
+            .onChanged { value in
+                if !bottomPullIsTracking {
+                    bottomPullIsTracking = true
+                    bottomPullStartedAtBottom = isScrollGeometryAtBottom && !isRefreshingChatData
+                    hasFiredBottomPullHaptic = false
+                }
+
+                guard bottomPullStartedAtBottom else { return }
+
+                let distance = max(0, -value.translation.height)
+                bottomPullDistance = distance
+
+                if distance >= bottomRefreshThreshold, !hasFiredBottomPullHaptic {
+                    hasFiredBottomPullHaptic = true
+                    OpenCodeHaptics.impact(.crisp)
+                } else if distance < bottomRefreshThreshold * 0.65 {
+                    hasFiredBottomPullHaptic = false
+                }
+            }
+            .onEnded { _ in
+                let shouldRefresh = bottomPullStartedAtBottom && bottomPullDistance >= bottomRefreshThreshold && !isRefreshingChatData
+                bottomPullIsTracking = false
+                bottomPullStartedAtBottom = false
+                hasFiredBottomPullHaptic = false
+
+                if shouldRefresh {
+                    Task { @MainActor in
+                        await refreshChatDataFromBottomOverscroll()
+                    }
+                } else {
+                    withAnimation(.snappy(duration: 0.2, extraBounce: 0.02)) {
+                        bottomPullDistance = 0
+                    }
+                }
+            }
+    }
+
+    @MainActor
+    private func refreshChatDataFromBottomOverscroll() async {
+        guard !isRefreshingChatData else { return }
+        withAnimation(.snappy(duration: 0.18, extraBounce: 0.02)) {
+            bottomPullDistance = bottomRefreshThreshold
+            isRefreshingChatData = true
+        }
+        defer {
+            withAnimation(.snappy(duration: 0.22, extraBounce: 0.02)) {
+                isRefreshingChatData = false
+                bottomPullDistance = 0
+            }
+        }
+        await viewModel.refreshChatData(for: sessionID)
     }
 
     private var messageBottomPadding: CGFloat { 20 }
@@ -749,10 +859,13 @@ struct ChatView: View {
         if !hasAttachments,
            (viewModel.shouldOpenForkSheet(forSlashInput: draftText) || viewModel.slashCommandInput(from: draftText).map({ viewModel.isForkClientCommand($0.command) }) == true) {
             viewModel.draftMessage = ""
+            viewModel.clearPersistedMessageDraft(forSessionID: sessionID)
             viewModel.composerResetToken = UUID()
             viewModel.presentForkSessionSheet()
             return
         }
+
+        guard viewModel.reserveUserPromptIfAllowed() else { return }
 
         OpenCodeHaptics.impact(.strong)
 
@@ -776,6 +889,7 @@ struct ChatView: View {
         pendingOutgoingSend = pendingSend
         viewModel.draftMessage = ""
         viewModel.clearDraftAttachments()
+        viewModel.clearPersistedMessageDraft(forSessionID: sessionID)
         viewModel.composerResetToken = UUID()
 
         if shouldAnimateBubble {
@@ -799,7 +913,8 @@ struct ChatView: View {
                     userVisible: true,
                     messageID: pendingSend.messageID,
                     partID: pendingSend.partID,
-                    appendOptimisticMessage: false
+                    appendOptimisticMessage: false,
+                    meterPrompt: false
                 )
             }
             return
@@ -811,8 +926,9 @@ struct ChatView: View {
 
             viewModel.draftMessage = pendingSend.text
             viewModel.addDraftAttachments(pendingSend.attachments)
+            viewModel.persistCurrentMessageDraft(forSessionID: sessionID)
             pendingOutgoingSend = nil
-            await viewModel.sendCurrentMessage()
+            await viewModel.sendCurrentMessage(meterPrompt: false)
         }
     }
 
@@ -830,6 +946,7 @@ struct ChatView: View {
             }
             viewModel.draftMessage = pendingSend.text
             viewModel.addDraftAttachments(pendingSend.attachments)
+            viewModel.persistCurrentMessageDraft(forSessionID: sessionID)
             return
         }
 
@@ -1130,7 +1247,7 @@ private extension View {
             self
         }
 #else
-        self
+            self
 #endif
     }
 }

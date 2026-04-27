@@ -37,6 +37,12 @@ struct ScreenshotSceneView: View {
             NavigationStack {
                 ChatView(viewModel: viewModel, sessionID: OpenClientScreenshotData.releaseSession.id)
             }
+        case .paywall:
+            OpenClientPaywallView(
+                viewModel: viewModel,
+                purchaseManager: viewModel.purchaseManager,
+                reason: .manual
+            )
         case .recentWidget:
             WidgetScreenshotDashboardView(
                 title: "Recent Sessions",
