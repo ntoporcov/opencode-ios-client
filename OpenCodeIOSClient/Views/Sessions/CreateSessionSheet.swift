@@ -16,6 +16,18 @@ struct CreateSessionSheet: View {
                         .foregroundStyle(.secondary)
                 }
 
+                if !viewModel.hasProUnlock {
+                    Section("Free Plan") {
+                        Text(viewModel.canCreateFreeSession ? "Your first session is included. Upgrade for unlimited sessions and prompts." : "Upgrade to create more sessions.")
+                            .foregroundStyle(.secondary)
+
+                        Button("Upgrade to Pro") {
+                            viewModel.isShowingCreateSessionSheet = false
+                            viewModel.presentPaywall(reason: .sessionLimit)
+                        }
+                    }
+                }
+
                 Section {
                     Button(viewModel.isLoading ? "Creating..." : "Create Session") {
                         Task { await viewModel.createSession() }

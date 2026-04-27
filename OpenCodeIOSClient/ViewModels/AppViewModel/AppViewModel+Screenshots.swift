@@ -9,6 +9,7 @@ enum OpenClientScreenshotScene: String, CaseIterable {
     case chat
     case permission
     case question
+    case paywall
     case recentWidget = "recent-widget"
     case pinnedWidget = "pinned-widget"
 
@@ -41,6 +42,8 @@ extension AppViewModel {
             return screenshotPermission()
         case .question, .recentWidget, .pinnedWidget:
             return screenshotQuestion()
+        case .paywall:
+            return screenshotPaywall()
         }
     }
 
@@ -86,6 +89,15 @@ extension AppViewModel {
     private static func screenshotQuestion() -> AppViewModel {
         let viewModel = baseConnectedScreenshotViewModel(selectedSession: OpenClientScreenshotData.releaseSession)
         viewModel.directoryState.questions = [OpenClientScreenshotData.questionRequest]
+        return viewModel
+    }
+
+    private static func screenshotPaywall() -> AppViewModel {
+        let viewModel = baseConnectedScreenshotViewModel(selectedSession: OpenClientScreenshotData.releaseSession)
+        viewModel.paywallReason = .manual
+#if DEBUG
+        viewModel.debugEntitlementOverride = .free
+#endif
         return viewModel
     }
 

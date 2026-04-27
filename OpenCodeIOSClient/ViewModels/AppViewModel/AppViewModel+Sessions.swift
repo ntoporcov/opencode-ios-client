@@ -43,6 +43,7 @@ enum AppleIntelligenceIntent: String, CaseIterable, Sendable {
 extension AppViewModel {
     func prepareSessionSelection(_ session: OpenCodeSession) {
         let cachedMessages = cachedMessagesBySessionID[session.id] ?? []
+        preserveCurrentMessageDraftForNavigation()
         withAnimation(opencodeSelectionAnimation) {
             selectedProjectContentTab = .sessions
             directoryState.selectedSession = session
@@ -53,6 +54,7 @@ extension AppViewModel {
             directoryState.questions = []
             directoryState.selectedVCSFile = nil
         }
+        restoreMessageDraft(for: session)
         streamDirectory = session.directory
     }
 
@@ -135,6 +137,8 @@ extension AppViewModel {
     }
 
     func createSession() async {
+        guard canCreateSessionOrPresentPaywall() else { return }
+
         isLoading = true
         defer { isLoading = false }
 
@@ -152,6 +156,7 @@ extension AppViewModel {
                 directoryState.selectedSession = session
                 directoryState.isLoadingSelectedSession = true
             }
+            restoreMessageDraft(for: session)
             streamDirectory = session.directory
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.todos = []
@@ -159,6 +164,7 @@ extension AppViewModel {
             try await loadMessages(for: session)
             seedComposerSelectionsForNewSession(session)
             await maybeAutoStartLiveActivity(for: session)
+            recordCreatedSessionForMetering()
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -171,16 +177,21 @@ extension AppViewModel {
                 selectedProjectContentTab = .sessions
                 directoryState.selectedSession = session
             }
+            restoreMessageDraft(for: session)
             return
         }
 
-        prepareSessionSelection(session)
+        let didPrepareSelection = selectedSession?.id == session.id
+        if !didPrepareSelection {
+            prepareSessionSelection(session)
+        }
         do {
             async let messages: Void = loadMessages(for: session)
             async let statuses: Void = reloadSessionStatuses()
             async let permissions: Void = loadAllPermissions(for: session)
             async let questions: Void = loadAllQuestions(for: session)
             _ = try await (messages, statuses, permissions, questions)
+            restoreMessageDraftIfComposerIsEmpty(for: session)
             await maybeAutoStartLiveActivity(for: session)
             errorMessage = nil
         } catch {
@@ -189,8 +200,9 @@ extension AppViewModel {
         }
     }
 
-    func sendCurrentMessage() async {
+    func sendCurrentMessage(meterPrompt: Bool = true) async {
         if isUsingAppleIntelligence {
+            if meterPrompt, !reserveUserPromptIfAllowed() { return }
             await sendCurrentAppleIntelligenceMessage()
             return
         }
@@ -214,29 +226,34 @@ extension AppViewModel {
                 presentForkSessionSheet()
                 return
             }
-            await sendCommand(command, arguments: arguments, attachments: attachments, sessionID: selectedSessionID, userVisible: true)
+            await sendCommand(command, arguments: arguments, attachments: attachments, sessionID: selectedSessionID, userVisible: true, meterPrompt: meterPrompt)
             return
         }
 
-        await sendMessage(text, attachments: attachments, sessionID: selectedSessionID, userVisible: true)
+        await sendMessage(text, attachments: attachments, sessionID: selectedSessionID, userVisible: true, meterPrompt: meterPrompt)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, sessionID: String, userVisible: Bool) async {
-        await sendCommand(command, arguments: "", attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible)
+    func sendCommand(_ command: OpenCodeCommand, sessionID: String, userVisible: Bool, meterPrompt: Bool = true) async {
+        await sendCommand(command, arguments: "", attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible, meterPrompt: meterPrompt)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, arguments: String, sessionID: String, userVisible: Bool) async {
-        await sendCommand(command, arguments: arguments, attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible)
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, sessionID: String, userVisible: Bool, meterPrompt: Bool = true) async {
+        await sendCommand(command, arguments: arguments, attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible, meterPrompt: meterPrompt)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], sessionID: String, userVisible: Bool) async {
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], sessionID: String, userVisible: Bool, meterPrompt: Bool = true) async {
         guard let session = session(matching: sessionID) else { return }
-        await sendCommand(command, arguments: arguments, attachments: attachments, in: session, userVisible: userVisible)
+        await sendCommand(command, arguments: arguments, attachments: attachments, in: session, userVisible: userVisible, meterPrompt: meterPrompt)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], in selectedSession: OpenCodeSession, userVisible: Bool) async {
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], in selectedSession: OpenCodeSession, userVisible: Bool, meterPrompt: Bool = true) async {
         guard directoryState.sessionStatuses[selectedSession.id] != "busy" else {
             appendDebugLog("command blocked busy session=\(debugSessionLabel(selectedSession)) command=\(command.name)")
+            return
+        }
+
+        if userVisible, meterPrompt, !reserveUserPromptIfAllowed() {
+            appendDebugLog("command blocked paywall session=\(debugSessionLabel(selectedSession)) command=\(command.name)")
             return
         }
 
@@ -250,6 +267,7 @@ extension AppViewModel {
         if userVisible {
             draftMessage = ""
             clearDraftAttachments()
+            clearPersistedMessageDraft(forSessionID: selectedSession.id)
             composerResetToken = UUID()
         }
 
@@ -281,8 +299,12 @@ extension AppViewModel {
             errorMessage = nil
         } catch {
             if userVisible {
+                refundReservedUserPromptIfNeeded()
+            }
+            if userVisible {
                 draftMessage = draftCommand
                 addDraftAttachments(attachments)
+                persistCurrentMessageDraft(forSessionID: selectedSession.id)
             }
             directoryState.sessionStatuses[selectedSession.id] = previousStatus
             appendDebugLog("command error: \(error.localizedDescription)")
@@ -328,7 +350,7 @@ extension AppViewModel {
         }
     }
 
-    func sendMessage(_ text: String, attachments: [OpenCodeComposerAttachment] = [], sessionID: String, userVisible: Bool) async {
+    func sendMessage(_ text: String, attachments: [OpenCodeComposerAttachment] = [], sessionID: String, userVisible: Bool, meterPrompt: Bool = true) async {
         if isUsingAppleIntelligence {
             guard let session = session(matching: sessionID) else { return }
             await sendAppleIntelligenceMessage(text, attachments: attachments, in: session, userVisible: userVisible)
@@ -336,7 +358,7 @@ extension AppViewModel {
         }
 
         guard let session = session(matching: sessionID) else { return }
-        await sendMessage(text, attachments: attachments, in: session, userVisible: userVisible)
+        await sendMessage(text, attachments: attachments, in: session, userVisible: userVisible, meterPrompt: meterPrompt)
     }
 
     @discardableResult
@@ -378,10 +400,16 @@ extension AppViewModel {
         userVisible: Bool,
         messageID: String? = nil,
         partID: String? = nil,
-        appendOptimisticMessage: Bool = true
+        appendOptimisticMessage: Bool = true,
+        meterPrompt: Bool = true
     ) async {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty || !attachments.isEmpty else { return }
+
+        if userVisible, meterPrompt, !reserveUserPromptIfAllowed() {
+            appendDebugLog("send blocked paywall session=\(debugSessionLabel(selectedSession))")
+            return
+        }
 
         let requestDirectory = sendDirectory(for: selectedSession)
         let resolvedMessageID = messageID ?? OpenCodeIdentifier.message()
@@ -406,6 +434,7 @@ extension AppViewModel {
         if userVisible, appendOptimisticMessage {
             draftMessage = ""
             clearDraftAttachments()
+            clearPersistedMessageDraft(forSessionID: selectedSession.id)
             composerResetToken = UUID()
             directoryState.messages.append(localUserMessage)
         }
@@ -447,9 +476,13 @@ extension AppViewModel {
             errorMessage = nil
         } catch {
             if userVisible {
+                refundReservedUserPromptIfNeeded()
+            }
+            if userVisible {
                 directoryState.messages.removeAll { $0.id == localUserMessage.id }
                 draftMessage = trimmed
                 addDraftAttachments(attachments)
+                persistCurrentMessageDraft(forSessionID: selectedSession.id)
             }
             directoryState.sessionStatuses[selectedSession.id] = previousStatus
             appendDebugLog("send error: \(error.localizedDescription)")
@@ -543,6 +576,7 @@ extension AppViewModel {
             if let restoredPrompt {
                 draftMessage = restoredPrompt.text
                 draftAttachments = restoredPrompt.attachments
+                persistCurrentMessageDraft(forSessionID: forked.id)
                 composerResetToken = UUID()
             }
 
@@ -594,6 +628,29 @@ extension AppViewModel {
         refreshLiveActivityIfNeeded(for: session.id)
         await loadTodos(for: session)
         directoryState.isLoadingSelectedSession = false
+    }
+
+    func refreshChatData(for sessionID: String) async {
+        guard !isUsingAppleIntelligence else { return }
+        guard let session = session(matching: sessionID) else { return }
+
+        appendDebugLog("manual chat refresh session=\(debugSessionLabel(session))")
+
+        do {
+            async let sessions: Void = reloadSessions()
+            async let statuses: Void = reloadSessionStatuses()
+            async let messages: Void = loadMessages(for: session)
+            async let permissions: Void = loadAllPermissions(for: session)
+            async let questions: Void = loadAllQuestions(for: session)
+            _ = try await (sessions, statuses, messages, permissions, questions)
+
+            let refreshedSession = self.session(matching: sessionID) ?? session
+            await refreshToolMessageDetails(for: refreshedSession, messages: cachedMessagesBySessionID[sessionID] ?? directoryState.messages)
+            errorMessage = nil
+        } catch {
+            appendDebugLog("manual chat refresh error session=\(debugSessionLabel(session)) error=\(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+        }
     }
 
     func mergeMessagesPreservingStreamProgress(
@@ -836,11 +893,13 @@ extension AppViewModel {
             unpinSession(session)
             removeSessionPreview(for: session.id)
             if directoryState.selectedSession?.id == session.id {
+                persistCurrentMessageDraft(forSessionID: session.id)
                 withAnimation(opencodeSelectionAnimation) {
                     directoryState.selectedSession = nil
                     directoryState.messages = []
                 }
             }
+            clearPersistedMessageDraft(forSessionID: session.id)
             try await reloadSessions()
         } catch {
             errorMessage = error.localizedDescription
@@ -1019,6 +1078,20 @@ extension AppViewModel {
         }
     }
 
+    func refreshToolMessageDetails(for session: OpenCodeSession, messages: [OpenCodeMessageEnvelope]) async {
+        let toolMessageIDs = Set(messages.filter { envelope in
+            envelope.parts.contains(where: { $0.type == "tool" })
+        }.map(\.info.id))
+
+        for messageID in toolMessageIDs {
+            do {
+                toolMessageDetails[messageID] = try await client.getMessage(sessionID: session.id, messageID: messageID)
+            } catch {
+                appendDebugLog("tool detail refresh failed session=\(debugSessionLabel(session)) message=\(messageID) error=\(error.localizedDescription)")
+            }
+        }
+    }
+
     func sendCurrentAppleIntelligenceMessage() async {
         guard let selectedSession else { return }
         let text = draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1074,6 +1147,7 @@ extension AppViewModel {
         if userVisible {
             draftMessage = ""
             clearDraftAttachments()
+            clearPersistedMessageDraft(forSessionID: session.id)
             composerResetToken = UUID()
             withAnimation(opencodeSelectionAnimation) {
                 directoryState.messages.append(localUserMessage)

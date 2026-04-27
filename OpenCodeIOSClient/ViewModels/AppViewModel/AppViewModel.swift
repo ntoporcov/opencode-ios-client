@@ -33,6 +33,7 @@ final class AppViewModel: ObservableObject {
         static let sessionPreviews = "sessionPreviews"
         static let pinnedSessionsByScope = "pinnedSessionsByScope"
         static let liveActivityAutoStartByScope = "liveActivityAutoStartByScope"
+        static let messageDraftsByChat = "messageDraftsByChat"
     }
 
     @Published var config = OpenCodeServerConfig()
@@ -62,6 +63,7 @@ final class AppViewModel: ObservableObject {
     @Published var draftTitle = ""
     @Published var draftMessage = ""
     @Published var draftAttachments: [OpenCodeComposerAttachment] = []
+    @Published var messageDraftsByChatKey: [String: OpenCodeMessageDraft] = [:]
     @Published var composerResetToken = UUID()
     @Published var errorMessage: String?
     @Published var appleIntelligenceDebugPickedPath = ""
@@ -94,8 +96,15 @@ final class AppViewModel: ObservableObject {
     @Published var newSessionDefaults = NewSessionDefaults()
     @Published var activeLiveActivitySessionIDs: Set<String> = []
     @Published var activeChatSessionID: String?
+    @Published var usageMeter = OpenClientUsageMeter.empty
+    @Published var paywallReason: OpenClientPaywallReason?
+#if DEBUG
+    @Published var debugEntitlementOverride: OpenClientDebugEntitlementOverride = .unlocked
+#endif
 
     let passwordStore = OpenCodeServerPasswordStore()
+    let usageStore = OpenClientUsageStore()
+    let purchaseManager = OpenClientPurchaseManager()
 
     let eventManager = OpenCodeEventManager()
     var eventStreamRestartTask: Task<Void, Never>?
@@ -132,9 +141,17 @@ final class AppViewModel: ObservableObject {
         let recentConfigs = loadRecentServerConfigs()
         appleIntelligenceUserInstructions = defaultAppleIntelligenceUserInstructions
         appleIntelligenceSystemInstructions = defaultAppleIntelligenceSystemInstructions
+        usageMeter = usageStore.load()
+#if DEBUG
+        if let override = ProcessInfo.processInfo.environment["OPENCLIENT_DEBUG_ENTITLEMENT"],
+           let value = OpenClientDebugEntitlementOverride(rawValue: override) {
+            debugEntitlementOverride = value
+        }
+#endif
         sessionPreviews = loadSessionPreviews()
         pinnedSessionIDsByScope = loadPinnedSessionIDsByScope()
         liveActivityAutoStartByScope = loadLiveActivityAutoStartByScope()
+        messageDraftsByChatKey = loadMessageDraftsByChatKey()
         recentServerConfigs = recentConfigs
         hasSavedServer = recentConfigs.isEmpty == false
         showSavedServerPrompt = hasSavedServer

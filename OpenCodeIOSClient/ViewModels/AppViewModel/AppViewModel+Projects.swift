@@ -10,6 +10,7 @@ extension AppViewModel {
     }
 
     func prepareDirectorySelection(_ directory: String?) {
+        preserveCurrentMessageDraftForNavigation()
         withAnimation(opencodeSelectionAnimation) {
             selectedDirectory = directory
             selectedProjectContentTab = .sessions
@@ -261,6 +262,8 @@ extension AppViewModel {
     }
 
     func isProjectSelected(_ project: OpenCodeProject?) -> Bool {
+        guard currentProject != nil else { return false }
+
         switch project {
         case .none:
             return selectedDirectory == nil
@@ -277,11 +280,6 @@ extension AppViewModel {
         mergeProjectsPreservingLocal(serverProjects: serverProjects)
         let serverProject = try? await client.currentProject()
         reconcileCurrentProjectSelection(serverProject: serverProject)
-    }
-
-    func directorySelection(for project: OpenCodeProject?) -> String? {
-        guard let project, project.id != "global" else { return nil }
-        return project.worktree
     }
 
     private func cleanedDirectorySearchInput(_ value: String) -> String {
@@ -411,6 +409,8 @@ extension AppViewModel {
                 }
             return
         }
+
+        guard currentProject != nil else { return }
 
         currentProject = projects.first(where: { $0.id == "global" })
             ?? serverProject.flatMap { project in

@@ -20,6 +20,10 @@ struct SessionRow: View {
         viewModel.isLiveActivityActive(for: session)
     }
 
+    private var hasDraft: Bool {
+        viewModel.hasMessageDraft(for: session)
+    }
+
     var body: some View {
         Group {
             switch style {
@@ -40,6 +44,7 @@ struct SessionRow: View {
         .contentShape(Rectangle())
         .animation(opencodeSelectionAnimation, value: isBusy)
         .animation(opencodeSelectionAnimation, value: hasLiveActivity)
+        .animation(opencodeSelectionAnimation, value: hasDraft)
         .animation(opencodeSelectionAnimation, value: viewModel.hasPermissionRequest(for: session))
         .animation(opencodeSelectionAnimation, value: viewModel.sessionPreviews[session.id]?.text ?? "")
     }
@@ -88,6 +93,10 @@ struct SessionRow: View {
                         badgeIcon(systemName: "waveform", foreground: .indigo, background: Color.indigo.opacity(0.12))
                     }
 
+                    if hasDraft {
+                        badgeIcon(systemName: "pencil", foreground: .secondary, background: Color.gray.opacity(0.12))
+                    }
+
                     if viewModel.hasPermissionRequest(for: session) {
                         badgeIcon(systemName: "hand.raised.fill", foreground: .orange, background: Color.orange.opacity(0.12))
                     }
@@ -121,6 +130,10 @@ struct SessionRow: View {
 
             if hasLiveActivity {
                 badgeIcon(systemName: "waveform", foreground: .indigo, background: Color.indigo.opacity(0.12))
+            }
+
+            if hasDraft {
+                badgeIcon(systemName: "pencil", foreground: .secondary, background: Color.gray.opacity(0.12))
             }
 
             if viewModel.hasPermissionRequest(for: session) {
