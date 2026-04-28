@@ -25,6 +25,10 @@ final class OpenCodeIOSClientUITests: XCTestCase {
 
     @MainActor
     func testAppStoreScreenshots() {
+        if isRunningOniPadSimulator {
+            XCUIDevice.shared.orientation = .landscapeLeft
+        }
+
         let scenes: [(scene: String, screenshotName: String)] = [
             ("connection", "01-connection"),
             ("recent-servers", "02-recent-servers"),
@@ -36,6 +40,7 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             ("paywall", "08-paywall"),
             ("recent-widget", "09-recent-widget"),
             ("pinned-widget", "10-pinned-widget"),
+            ("live-activity", "11-live-activity"),
         ]
 
         for (scene, screenshotName) in scenes {
@@ -49,6 +54,11 @@ final class OpenCodeIOSClientUITests: XCTestCase {
             snapshot(screenshotName)
             app.terminate()
         }
+    }
+
+    private var isRunningOniPadSimulator: Bool {
+        let deviceName = environment["SIMULATOR_DEVICE_NAME"] ?? ""
+        return deviceName.localizedCaseInsensitiveContains("iPad")
     }
 
     @MainActor

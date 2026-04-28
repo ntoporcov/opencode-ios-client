@@ -12,6 +12,7 @@ enum OpenClientScreenshotScene: String, CaseIterable {
     case paywall
     case recentWidget = "recent-widget"
     case pinnedWidget = "pinned-widget"
+    case liveActivity = "live-activity"
 
     static var current: OpenClientScreenshotScene? {
         guard let rawValue = ProcessInfo.processInfo.environment["OPENCLIENT_SCREENSHOT_SCENE"] else {
@@ -40,7 +41,7 @@ extension AppViewModel {
             return screenshotChat()
         case .permission:
             return screenshotPermission()
-        case .question, .recentWidget, .pinnedWidget:
+        case .question, .recentWidget, .pinnedWidget, .liveActivity:
             return screenshotQuestion()
         case .paywall:
             return screenshotPaywall()
@@ -63,15 +64,11 @@ extension AppViewModel {
 
     private static func screenshotProjects() -> AppViewModel {
         let viewModel = baseConnectedScreenshotViewModel()
-        viewModel.currentProject = nil
-        viewModel.selectedDirectory = nil
-        viewModel.directoryState.selectedSession = nil
         return viewModel
     }
 
     private static func screenshotSessions() -> AppViewModel {
         let viewModel = baseConnectedScreenshotViewModel()
-        viewModel.directoryState.selectedSession = nil
         viewModel.pinnedSessionIDsByScope = [viewModel.currentPinScopeKey: [OpenClientScreenshotData.releaseSession.id]]
         return viewModel
     }

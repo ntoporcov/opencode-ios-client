@@ -19,13 +19,14 @@ struct WidgetScreenshotDashboardView: View {
                 VStack(spacing: 14) {
                     Text("Home Screen Widgets")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.62))
                         .textCase(.uppercase)
                     Text(title)
                         .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
                     Text("Track running sessions, approvals, and questions across projects.")
                         .font(.headline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.white.opacity(0.72))
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: 520)
                 }
@@ -75,13 +76,136 @@ struct WidgetScreenshotDashboardView: View {
         }
     }
 
-    private func screenshotWidgetChrome<Content: View>(width: CGFloat, height: CGFloat, contentPadding: CGFloat = 0, @ViewBuilder content: () -> Content) -> some View {
+    private func screenshotWidgetChrome<Content: View>(width: CGFloat, height: CGFloat, contentPadding: CGFloat = 18, @ViewBuilder content: () -> Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: 34, style: .continuous)
         return content()
             .padding(contentPadding)
             .frame(width: width, height: height, alignment: .topLeading)
             .opencodeGlassSurface(in: shape)
             .shadow(color: .black.opacity(0.42), radius: 30, x: 0, y: 22)
+    }
+}
+
+struct LiveActivityScreenshotView: View {
+    let session: OpenCodeSession
+    let project: OpenCodeProject
+    let permission: OpenCodePermission
+    let question: OpenCodeQuestionRequest
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [Color(red: 0.02, green: 0.025, blue: 0.04), Color(red: 0.07, green: 0.08, blue: 0.14)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            VStack(spacing: 24) {
+                VStack(spacing: 7) {
+                    Text("2:41")
+                        .font(.system(size: 72, weight: .semibold, design: .rounded))
+                    Text("Tuesday, April 28")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+                .padding(.top, 34)
+
+                Spacer(minLength: 0)
+
+                VStack(spacing: 14) {
+                    Text("Live Activities")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.55))
+                        .textCase(.uppercase)
+
+                    liveActivityCard
+
+                    dynamicIslandPreview
+                }
+                .padding(.horizontal, 22)
+
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(.white)
+        }
+    }
+
+    private var liveActivityCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                WidgetScreenshotAvatar(title: session.title ?? "OpenClient", size: 38)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(session.title ?? "Launch polish pass")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Text("Updated just now")
+                        .font(.caption2)
+                        .foregroundStyle(.white.opacity(0.62))
+                }
+
+                Spacer(minLength: 0)
+
+                Text("Action")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(.orange.opacity(0.22), in: Capsule())
+            }
+
+            Text(permission.summary)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.94))
+                .lineLimit(3)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 8) {
+                liveActivityButton("Allow Once", tint: .green)
+                liveActivityButton("Deny", tint: .red)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+        .frame(maxWidth: 520, alignment: .leading)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .strokeBorder(.white.opacity(0.14), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.38), radius: 28, x: 0, y: 18)
+    }
+
+    private var dynamicIslandPreview: some View {
+        HStack(spacing: 12) {
+            WidgetScreenshotAvatar(title: session.title ?? "OpenClient", size: 22)
+            Text(question.questions.first?.question ?? "Which screen should anchor the screenshots?")
+                .font(.caption.weight(.medium))
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            Circle()
+                .fill(.orange)
+                .frame(width: 9, height: 9)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .frame(maxWidth: 360)
+        .background(.black, in: Capsule())
+        .overlay {
+            Capsule().strokeBorder(.white.opacity(0.10), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.30), radius: 18, x: 0, y: 12)
+    }
+
+    private func liveActivityButton(_ title: String, tint: Color) -> some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .lineLimit(1)
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(tint, in: Capsule())
     }
 }
 
