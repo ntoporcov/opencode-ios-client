@@ -1,1 +1,1 @@
-The OpenCode's Client
+Client for OpenCode

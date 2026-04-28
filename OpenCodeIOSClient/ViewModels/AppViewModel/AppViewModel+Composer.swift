@@ -2,6 +2,8 @@ import Foundation
 import SwiftUI
 
 extension AppViewModel {
+    private static let preferredFallbackModelReference = OpenCodeModelReference(providerID: "opencode", modelID: "minimax-m2.5-free")
+
     func addDraftAttachments(_ attachments: [OpenCodeComposerAttachment]) {
         guard !attachments.isEmpty else { return }
 
@@ -256,6 +258,10 @@ extension AppViewModel {
             guard let defaultModelID = defaultModelsByProviderID[provider.id],
                   provider.models[defaultModelID] != nil else { continue }
             return OpenCodeModelReference(providerID: provider.id, modelID: defaultModelID)
+        }
+
+        if model(for: Self.preferredFallbackModelReference) != nil {
+            return Self.preferredFallbackModelReference
         }
 
         guard let provider = sortedProviders.first,

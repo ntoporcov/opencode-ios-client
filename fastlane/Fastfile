@@ -14,10 +14,44 @@ platform :ios do
 
   def screenshot_devices
     [
-      "iPhone 17 Pro",
-      "iPhone 17 Pro Max",
+      "iPhone 11 Pro Max",
       "iPad Pro 13-inch (M5)"
     ]
+  end
+
+  def normalize_ipad_landscape_screenshots(screenshot_output, device)
+    return unless device.downcase.include?("ipad")
+
+    identifier = device.tr(" ", "-")
+    pattern = File.join(screenshot_output, "en_US", "#{identifier}-*.png")
+    screenshots = Dir.glob(pattern)
+    return if screenshots.empty?
+
+    sh("sips -r 270 #{screenshots.map(&:shellescape).join(" ")}")
+  end
+
+  def ensure_screenshot_simulator(device)
+    devices = `xcrun simctl list devices available`
+    return if devices.include?("#{device} (")
+
+    device_types = {
+      "iPhone 11 Pro Max" => "com.apple.CoreSimulator.SimDeviceType.iPhone-11-Pro-Max",
+      "iPad Pro 13-inch (M5)" => "com.apple.CoreSimulator.SimDeviceType.iPad-Pro-13-inch-M5-12GB"
+    }
+    device_type = device_types[device]
+    UI.user_error!("No simulator device type configured for #{device}") if device_type.nil?
+
+    sh("xcrun simctl create #{device.shellescape} #{device_type.shellescape} com.apple.CoreSimulator.SimRuntime.iOS-26-2")
+  end
+
+  def metadata_path_for_upload(repo_root)
+    source = File.join(repo_root, "fastlane", "metadata")
+    temp = File.join(repo_root, "build", "fastlane", "metadata-upload")
+    FileUtils.rm_rf(temp)
+    FileUtils.mkdir_p(temp)
+    FileUtils.cp_r(Dir.glob(File.join(source, "*")), temp)
+    FileUtils.rm_rf(File.join(temp, "review_information"))
+    temp
   end
 
   def asc_api_key
@@ -132,12 +166,14 @@ platform :ios do
   desc "Upload App Store metadata without uploading a binary"
   lane :metadata do
     api_key = asc_api_key
+    metadata_path = metadata_path_for_upload(repo_root)
     deliver(
       api_key: api_key,
       force: true,
       skip_binary_upload: true,
       skip_screenshots: ENV["FASTLANE_SKIP_SCREENSHOTS"] == "1",
-      metadata_path: File.join(repo_root, "fastlane", "metadata")
+      precheck_include_in_app_purchases: false,
+      metadata_path: metadata_path
     )
   end
 
@@ -162,6 +198,7 @@ platform :ios do
 
     screenshot_devices.each do |device|
       UI.message("Capturing screenshots on #{device}")
+      ensure_screenshot_simulator(device)
       sh("xcrun simctl shutdown #{device.shellescape}; xcrun simctl erase #{device.shellescape}; xcrun simctl boot #{device.shellescape}; xcrun simctl bootstatus #{device.shellescape} -b")
       sh(
         [
@@ -177,6 +214,7 @@ platform :ios do
           "-derivedDataPath", File.join(repo_root, ".derived-data-screenshots").shellescape,
         ].join(" ")
       )
+      normalize_ipad_landscape_screenshots(screenshot_output, device)
     end
   end
 end

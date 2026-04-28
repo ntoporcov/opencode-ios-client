@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 #if DEBUG
 struct ScreenshotSceneView: View {
@@ -25,17 +26,29 @@ struct ScreenshotSceneView: View {
                 ConnectionView(viewModel: viewModel)
             }
         case .projects:
-            NavigationStack {
-                ProjectListView(viewModel: viewModel) {}
+            if isRunningOniPad {
+                RootView(viewModel: viewModel)
+            } else {
+                NavigationStack {
+                    ProjectListView(viewModel: viewModel) {}
+                }
             }
         case .sessions:
-            NavigationStack {
-                SessionListView(viewModel: viewModel) {}
-                    .navigationTitle("Sessions")
+            if isRunningOniPad {
+                RootView(viewModel: viewModel)
+            } else {
+                NavigationStack {
+                    SessionListView(viewModel: viewModel) {}
+                        .navigationTitle("Sessions")
+                }
             }
         case .chat, .permission, .question:
-            NavigationStack {
-                ChatView(viewModel: viewModel, sessionID: OpenClientScreenshotData.releaseSession.id)
+            if isRunningOniPad {
+                RootView(viewModel: viewModel)
+            } else {
+                NavigationStack {
+                    ChatView(viewModel: viewModel, sessionID: OpenClientScreenshotData.releaseSession.id)
+                }
             }
         case .paywall:
             OpenClientPaywallView(
@@ -55,7 +68,18 @@ struct ScreenshotSceneView: View {
                 serverName: OpenClientScreenshotData.widgetServer.displayName,
                 sessions: OpenClientScreenshotData.pinnedWidgetSessions
             )
+        case .liveActivity:
+            LiveActivityScreenshotView(
+                session: OpenClientScreenshotData.releaseSession,
+                project: OpenClientScreenshotData.repoProject,
+                permission: OpenClientScreenshotData.permission,
+                question: OpenClientScreenshotData.questionRequest
+            )
         }
+    }
+
+    private var isRunningOniPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
     }
 }
 #endif

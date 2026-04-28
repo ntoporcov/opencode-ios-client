@@ -1,8 +1,7 @@
 scheme("OpenCodeIOSClientScreenshots")
 output_directory("./screenshots")
 devices([
-  "iPhone 17 Pro",
-  "iPhone 17 Pro Max",
+  "iPhone 11 Pro Max",
   "iPad Pro 13-inch (M5)"
 ])
 languages([

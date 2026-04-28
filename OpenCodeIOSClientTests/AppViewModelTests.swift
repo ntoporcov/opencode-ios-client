@@ -417,4 +417,74 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(lines.map(\.text), ["Shipping now"])
         XCTAssertEqual(lines.last?.isStreaming, true)
     }
+
+    func testDefaultModelPrefersFreeFallbackWhenServerHasNoDefault() {
+        let viewModel = AppViewModel()
+        viewModel.availableProviders = [
+            OpenCodeProvider(
+                id: "openai",
+                name: "OpenAI",
+                models: [
+                    "gpt-5.5-fast": OpenCodeModel(
+                        id: "gpt-5.5-fast",
+                        providerID: "openai",
+                        name: "GPT-5.5 Fast",
+                        capabilities: OpenCodeModelCapabilities(reasoning: true),
+                        variants: nil
+                    ),
+                ]
+            ),
+            OpenCodeProvider(
+                id: "opencode",
+                name: "OpenCode Zen",
+                models: [
+                    "minimax-m2.5-free": OpenCodeModel(
+                        id: "minimax-m2.5-free",
+                        providerID: "opencode",
+                        name: "MiniMax M2.5 Free",
+                        capabilities: OpenCodeModelCapabilities(reasoning: false),
+                        variants: nil
+                    ),
+                ]
+            ),
+        ]
+        viewModel.defaultModelsByProviderID = [:]
+
+        XCTAssertEqual(viewModel.defaultModelReference(), OpenCodeModelReference(providerID: "opencode", modelID: "minimax-m2.5-free"))
+    }
+
+    func testDefaultModelUsesServerDefaultBeforeFreeFallback() {
+        let viewModel = AppViewModel()
+        viewModel.availableProviders = [
+            OpenCodeProvider(
+                id: "openai",
+                name: "OpenAI",
+                models: [
+                    "gpt-5.4-mini": OpenCodeModel(
+                        id: "gpt-5.4-mini",
+                        providerID: "openai",
+                        name: "GPT-5.4 mini",
+                        capabilities: OpenCodeModelCapabilities(reasoning: true),
+                        variants: nil
+                    ),
+                ]
+            ),
+            OpenCodeProvider(
+                id: "opencode",
+                name: "OpenCode Zen",
+                models: [
+                    "minimax-m2.5-free": OpenCodeModel(
+                        id: "minimax-m2.5-free",
+                        providerID: "opencode",
+                        name: "MiniMax M2.5 Free",
+                        capabilities: OpenCodeModelCapabilities(reasoning: false),
+                        variants: nil
+                    ),
+                ]
+            ),
+        ]
+        viewModel.defaultModelsByProviderID = ["openai": "gpt-5.4-mini"]
+
+        XCTAssertEqual(viewModel.defaultModelReference(), OpenCodeModelReference(providerID: "openai", modelID: "gpt-5.4-mini"))
+    }
 }

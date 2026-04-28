@@ -1,1 +1,1 @@
-AI OpenClient
+OpenClient for OpenCode

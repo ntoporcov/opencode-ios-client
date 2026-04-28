@@ -45,6 +45,9 @@ targets:
       - path: AppIcon.icon
         buildPhase: resources
         group: OpenCodeIOSClient
+      - path: OpenClient_icons
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: OpenCodeChatActivityExtension
         embed: true
