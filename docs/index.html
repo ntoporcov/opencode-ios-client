@@ -21,20 +21,32 @@
     </header>
 
     <main>
-      <section class="hero">
-        <div class="wrap bento-grid">
-          <article class="panel bento-card bento-hero" id="features">
-            <div class="eyebrow">Native client for self-hosted OpenCode</div>
-            <h1>Your OpenCode server, in your pocket.</h1>
-            <p class="subhead">
-              Browse sessions, continue chats, answer permission requests, and keep active work close at hand from a native mobile interface.
+      <section class="hero" id="features">
+        <div class="wrap hero-inner">
+          <div class="hero-intro">
+            <div class="hero-kicker">OpenClient for iOS</div>
+            <h1 class="hero-title">Your OpenCode server, anywhere.</h1>
+            <p class="hero-subtitle">
+              Continue sessions, answer prompts, and keep your self-hosted OpenCode work moving from iPhone and iPad.
             </p>
-            <div class="cta-row">
+            <div class="hero-actions">
               <a class="button primary" href="https://github.com/ntoporcov/openclient">View on GitHub</a>
               <a class="button" href="./privacy/">Privacy Policy</a>
             </div>
-          </article>
+          </div>
 
+          <div class="hero-showcase" aria-label="OpenClient app screenshots">
+            <img class="hero-phone hero-phone-left-outer" src="./images/recent-servers.png" alt="OpenClient recent servers screen on iPhone">
+            <img class="hero-phone hero-phone-left-inner" src="./images/sessions.png" alt="OpenClient sessions screen on iPhone">
+            <img class="hero-phone hero-phone-main" src="./images/hero-chat-max.png" alt="OpenClient chat screen on iPhone">
+            <img class="hero-phone hero-phone-right-inner" src="./images/permission.png" alt="OpenClient permission prompt on iPhone">
+            <img class="hero-phone hero-phone-right-outer" src="./images/question.png" alt="OpenClient question prompt on iPhone">
+          </div>
+        </div>
+      </section>
+
+      <section class="feature-grid">
+        <div class="wrap bento-grid">
           <article class="panel bento-card bento-story">
             <div class="eyebrow">Self-hosted by design</div>
             <h2>Bring your OpenCode server with you.</h2>
