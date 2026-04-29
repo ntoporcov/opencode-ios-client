@@ -367,7 +367,8 @@ extension AppViewModel {
         attachments: [OpenCodeComposerAttachment] = [],
         in selectedSession: OpenCodeSession,
         messageID: String? = nil,
-        partID: String? = nil
+        partID: String? = nil,
+        animated: Bool = true
     ) -> (messageID: String, partID: String) {
         let resolvedMessageID = messageID ?? OpenCodeIdentifier.message()
         let resolvedPartID = partID ?? OpenCodeIdentifier.part()
@@ -387,7 +388,11 @@ extension AppViewModel {
             model: optimisticModel
         )
 
-        withAnimation(.snappy(duration: 0.28, extraBounce: 0.02)) {
+        if animated {
+            withAnimation(.snappy(duration: 0.28, extraBounce: 0.02)) {
+                directoryState.messages.append(localUserMessage)
+            }
+        } else {
             directoryState.messages.append(localUserMessage)
         }
         markChatBreadcrumb("optimistic insert", sessionID: selectedSession.id, messageID: resolvedMessageID, partID: resolvedPartID)

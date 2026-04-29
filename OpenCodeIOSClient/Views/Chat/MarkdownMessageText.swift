@@ -32,6 +32,7 @@ struct MarkdownMessageText: View {
     let isUser: Bool
     let style: Style
     var isStreaming = false
+    var animatesStreamingText = true
 
     var body: some View {
         switch style {
@@ -46,7 +47,16 @@ struct MarkdownMessageText: View {
     private var content: some View {
         Group {
             if isStreaming {
-                styledText(Text(verbatim: text))
+                if animatesStreamingText, !isUser {
+                    StreamingTextFade(
+                        text: text,
+                        font: textFont,
+                        foregroundColor: textForegroundStyle,
+                        lineSpacing: textLineSpacing
+                    )
+                } else {
+                    styledText(Text(verbatim: text))
+                }
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(blocks) { block in
@@ -660,4 +670,123 @@ struct MarkdownMessageText: View {
             return 4
         }
     }
+}
+
+private struct StreamingTextFade: View {
+    let text: String
+    let font: Font
+    let foregroundColor: Color
+    let lineSpacing: CGFloat
+
+    @State private var targetText = ""
+    @State private var revealProgress = 0.0
+    @State private var writerTask: Task<Void, Never>?
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            layoutText
+                .opacity(0)
+                .accessibilityHidden(true)
+
+            renderedText
+        }
+        .font(font)
+        .lineSpacing(lineSpacing)
+        .multilineTextAlignment(.leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .onAppear {
+            updateTarget(text, animatingInitialText: true)
+        }
+        .onChange(of: text) { _, newText in
+            updateTarget(newText, animatingInitialText: false)
+        }
+        .onDisappear {
+            writerTask?.cancel()
+        }
+    }
+
+    private var layoutText: Text {
+        Text(verbatim: targetText.isEmpty ? text : targetText)
+            .foregroundColor(foregroundColor)
+    }
+
+    private var renderedText: Text {
+        let characters = Array(targetText.isEmpty ? text : targetText)
+        let solidCount = min(characters.count, max(0, Int(floor(revealProgress))))
+        var attributed = AttributedString(String(characters.prefix(solidCount)))
+        attributed.foregroundColor = foregroundColor
+
+        let fadeEnd = min(characters.count, solidCount + fadeWindowCharacterCount)
+        for index in solidCount ..< fadeEnd {
+            var character = AttributedString(String(characters[index]))
+            character.foregroundColor = foregroundColor.opacity(opacity(forCharacterAt: index))
+            attributed += character
+        }
+
+        return Text(attributed)
+    }
+
+    private func updateTarget(_ newText: String, animatingInitialText: Bool) {
+        guard newText != targetText else { return }
+
+        guard targetText.isEmpty || newText.hasPrefix(targetText) || newText.count >= Int(revealProgress) else {
+            targetText = newText
+            revealProgress = Double(newText.count)
+            return
+        }
+
+        targetText = newText
+        if animatingInitialText, revealProgress == 0 {
+            revealProgress = max(0, Double(newText.count) - 18)
+        } else {
+            revealProgress = min(revealProgress, Double(newText.count))
+        }
+        startWriterIfNeeded()
+    }
+
+    private func startWriterIfNeeded() {
+        guard writerTask == nil else { return }
+
+        writerTask = Task { @MainActor in
+            while !Task.isCancelled {
+                let remaining = Double(targetText.count) - revealProgress
+                guard remaining > 0.01 else {
+                    revealProgress = Double(targetText.count)
+                    writerTask = nil
+                    return
+                }
+
+                revealProgress = min(Double(targetText.count), revealProgress + revealStep(forRemainingCharacters: remaining))
+                try? await Task.sleep(for: .milliseconds(writerTickMilliseconds(forRemainingCharacters: remaining)))
+            }
+        }
+    }
+
+    private func opacity(forCharacterAt index: Int) -> Double {
+        let distance = Double(index + 1) - revealProgress
+        let opacity = 1 - (distance / Double(fadeWindowCharacterCount))
+        return min(1, max(0.12, opacity))
+    }
+
+    private func revealStep(forRemainingCharacters remaining: Double) -> Double {
+        if remaining < 10 {
+            return 1.1
+        }
+
+        if remaining < 45 {
+            return min(4.5, max(1.6, remaining / 9))
+        }
+
+        if remaining < 180 {
+            return min(14, max(5, remaining / 7))
+        }
+
+        return min(32, max(16, remaining / 5))
+    }
+
+    private func writerTickMilliseconds(forRemainingCharacters remaining: Double) -> Int {
+        remaining > 120 ? 18 : 26
+    }
+
+    private var fadeWindowCharacterCount: Int { 18 }
 }

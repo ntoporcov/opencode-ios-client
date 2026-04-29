@@ -458,6 +458,7 @@ extension AppViewModel {
     }
 
     func setSessionPreview(_ preview: SessionPreview, for sessionID: String) {
+        guard sessionPreviews[sessionID] != preview else { return }
         sessionPreviews[sessionID] = preview
         persistSessionPreviews()
         publishWidgetSnapshots()

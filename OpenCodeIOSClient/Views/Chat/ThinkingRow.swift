@@ -1,7 +1,13 @@
 import SwiftUI
 
 struct ThinkingRow: View {
+    var animateEntry = false
+
     @State private var phase = false
+    @State private var entryOffset: CGFloat = 0
+    @State private var entryOpacity: Double = 1
+    @State private var entryScale: CGFloat = 1
+    @State private var hasRunEntryAnimation = false
 
     var body: some View {
         HStack {
@@ -23,14 +29,43 @@ struct ThinkingRow: View {
             Spacer(minLength: 44)
         }
         .frame(maxWidth: .infinity)
+        .offset(y: entryOffset)
+        .opacity(entryOpacity)
+        .scaleEffect(entryScale, anchor: .bottomLeading)
         .onAppear {
+            runEntryAnimationIfNeeded()
             guard !phase else { return }
             withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                 phase = true
             }
         }
+        .onChange(of: animateEntry) { _, _ in
+            runEntryAnimationIfNeeded()
+        }
         .onDisappear {
             phase = false
+        }
+    }
+
+    private func runEntryAnimationIfNeeded() {
+        guard animateEntry, !hasRunEntryAnimation else { return }
+
+        hasRunEntryAnimation = true
+        var transaction = Transaction()
+        transaction.animation = nil
+
+        withTransaction(transaction) {
+            entryOffset = 220
+            entryOpacity = 0.001
+            entryScale = 0.985
+        }
+
+        DispatchQueue.main.async {
+            withAnimation(.spring(response: 0.46, dampingFraction: 0.86)) {
+                entryOffset = 0
+                entryOpacity = 1
+                entryScale = 1
+            }
         }
     }
 }

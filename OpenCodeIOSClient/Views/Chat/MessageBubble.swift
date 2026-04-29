@@ -11,6 +11,8 @@ struct MessageBubble: View {
     let detailedMessage: OpenCodeMessageEnvelope?
     let currentSessionID: String?
     let isStreamingMessage: Bool
+    let animatesStreamingText: Bool
+    let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
     let resolveTaskSessionID: (OpenCodePart, String) -> String?
     let onSelectPart: (OpenCodePart) -> Void
@@ -66,6 +68,10 @@ struct MessageBubble: View {
         return result
     }
 
+    private var entryStartOffset: CGSize {
+        CGSize(width: 0, height: 900)
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 0) {
             if isUser {
@@ -83,7 +89,11 @@ struct MessageBubble: View {
         .opacity(entryOpacity)
         .scaleEffect(entryScale, anchor: .bottomTrailing)
         .onAppear {
+            prepareEntryAnimationIfNeeded()
             runEntryAnimationIfNeeded()
+        }
+        .onChange(of: reserveEntryFromComposer) { _, _ in
+            prepareEntryAnimationIfNeeded()
         }
         .onChange(of: animateEntryFromComposer) { _, _ in
             runEntryAnimationIfNeeded()
@@ -181,7 +191,7 @@ struct MessageBubble: View {
         transaction.animation = nil
 
         withTransaction(transaction) {
-            entryOffset = CGSize(width: -130, height: 88)
+            entryOffset = entryStartOffset
             entryOpacity = 0.94
             entryScale = 0.985
         }
@@ -192,6 +202,19 @@ struct MessageBubble: View {
                 entryOpacity = 1
                 entryScale = 1
             }
+        }
+    }
+
+    private func prepareEntryAnimationIfNeeded() {
+        guard reserveEntryFromComposer, isUser, !hasRunEntryAnimation else { return }
+
+        var transaction = Transaction()
+        transaction.animation = nil
+
+        withTransaction(transaction) {
+            entryOffset = entryStartOffset
+            entryOpacity = 0.001
+            entryScale = 0.985
         }
     }
 
@@ -214,7 +237,7 @@ struct MessageBubble: View {
                     content
                 }
             } else {
-                let content = MarkdownMessageText(text: text, isUser: isUser, style: textStyle(for: part), isStreaming: isStreamingMessage)
+                let content = MarkdownMessageText(text: text, isUser: isUser, style: textStyle(for: part), isStreaming: isStreamingMessage, animatesStreamingText: animatesStreamingText)
 
                 if isUser {
                     bubbleWrapped(content)
