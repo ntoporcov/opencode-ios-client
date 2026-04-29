@@ -290,6 +290,21 @@ struct OpenCodeMessage: Codable, Hashable, Sendable {
     let providerID: String?
     let modelID: String?
 
+    enum CodingKeys: String, CodingKey {
+        case id
+        case role
+        case sessionID
+        case time
+        case agent
+        case model
+        case parentID
+        case mode
+        case summary
+        case finish
+        case providerID
+        case modelID
+    }
+
     init(
         id: String,
         role: String?,
@@ -321,6 +336,22 @@ struct OpenCodeMessage: Codable, Hashable, Sendable {
     var isCompactionSummary: Bool {
         (role ?? "").lowercased() == "assistant" && (summary == true || agent == "compaction" || mode == "compaction")
     }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        role = try container.decodeIfPresent(String.self, forKey: .role)
+        sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID)
+        time = try container.decodeIfPresent(OpenCodeMessageTime.self, forKey: .time)
+        agent = try container.decodeIfPresent(String.self, forKey: .agent)
+        model = try container.decodeIfPresent(OpenCodeMessageModelReference.self, forKey: .model)
+        parentID = try container.decodeIfPresent(String.self, forKey: .parentID)
+        mode = try container.decodeIfPresent(String.self, forKey: .mode)
+        summary = try? container.decode(Bool.self, forKey: .summary)
+        finish = try container.decodeIfPresent(String.self, forKey: .finish)
+        providerID = try container.decodeIfPresent(String.self, forKey: .providerID)
+        modelID = try container.decodeIfPresent(String.self, forKey: .modelID)
+    }
 }
 
 struct OpenCodeMessageModelReference: Codable, Hashable, Sendable {
@@ -350,6 +381,24 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
     let finish: String?
     let providerID: String?
     let modelID: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case role
+        case sessionID
+        case time
+        case agent
+        case model
+        case title
+        case directory
+        case projectID
+        case parentID
+        case mode
+        case summary
+        case finish
+        case providerID
+        case modelID
+    }
 
     init(message: OpenCodeMessage) {
         id = message.id
@@ -391,6 +440,25 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
 
     func asSession() -> OpenCodeSession {
         OpenCodeSession(id: id, title: title, workspaceID: nil, directory: directory, projectID: projectID, parentID: parentID)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        role = try container.decodeIfPresent(String.self, forKey: .role)
+        sessionID = try container.decodeIfPresent(String.self, forKey: .sessionID)
+        time = try container.decodeIfPresent(OpenCodeMessageTime.self, forKey: .time)
+        agent = try container.decodeIfPresent(String.self, forKey: .agent)
+        model = try container.decodeIfPresent(OpenCodeMessageModelReference.self, forKey: .model)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        directory = try container.decodeIfPresent(String.self, forKey: .directory)
+        projectID = try container.decodeIfPresent(String.self, forKey: .projectID)
+        parentID = try container.decodeIfPresent(String.self, forKey: .parentID)
+        mode = try container.decodeIfPresent(String.self, forKey: .mode)
+        summary = try? container.decode(Bool.self, forKey: .summary)
+        finish = try container.decodeIfPresent(String.self, forKey: .finish)
+        providerID = try container.decodeIfPresent(String.self, forKey: .providerID)
+        modelID = try container.decodeIfPresent(String.self, forKey: .modelID)
     }
 }
 
