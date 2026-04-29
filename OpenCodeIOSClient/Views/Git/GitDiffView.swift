@@ -88,12 +88,13 @@ struct ProjectFileContentView: View {
                 description: Text(viewModel.relativeGitPath(path))
             )
         } else {
-            ScrollView([.vertical, .horizontal]) {
-                Text(verbatim: content.content)
-                    .font(.system(.footnote, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .textSelection(.enabled)
+            ScrollView(.vertical) {
+                HighlightedCodeBlock(
+                    code: content.content,
+                    language: OpenCodeCodeLanguage.infer(fromPath: path)
+                )
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .background(OpenCodePlatformColor.groupedBackground)
         }
@@ -118,6 +119,10 @@ struct OpenCodeUnifiedDiffView: View {
     let diff: OpenCodeUnifiedDiffData
     var showsHeader = true
 
+    private var language: String? {
+        OpenCodeCodeLanguage.infer(fromPath: diff.file)
+    }
+
     var body: some View {
         ScrollView([.vertical, .horizontal]) {
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -127,7 +132,7 @@ struct OpenCodeUnifiedDiffView: View {
                 }
 
                 ForEach(GitPatchParser.parse(diff.patch)) { line in
-                    DiffLineRow(line: line)
+                    DiffLineRow(line: line, language: language)
                 }
             }
         }
@@ -180,6 +185,9 @@ struct OpenCodeUnifiedDiffView: View {
 
 private struct DiffLineRow: View {
     let line: GitPatchParser.Line
+    let language: String?
+
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         HStack(alignment: .top, spacing: 0) {
@@ -191,14 +199,26 @@ private struct DiffLineRow: View {
                 .foregroundStyle(line.foregroundColor)
                 .frame(width: 18, alignment: .center)
 
-            Text(verbatim: line.content.isEmpty ? " " : line.content)
-                .font(.system(.footnote, design: .monospaced))
-                .foregroundStyle(line.foregroundColor)
+            lineContent
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 2)
         .background(line.backgroundColor)
+    }
+
+    private var lineContent: some View {
+        Group {
+            if line.shouldSyntaxHighlight,
+               let language,
+               let attributed = OpenCodeSyntaxHighlighter.shared.highlight(line.content, language: language, colorScheme: colorScheme) {
+                Text(attributed)
+            } else {
+                Text(verbatim: line.content.isEmpty ? " " : line.content)
+                    .foregroundStyle(line.foregroundColor)
+            }
+        }
+        .font(.system(.footnote, design: .monospaced))
     }
 
     private func gutterText(_ value: Int?) -> some View {
@@ -277,6 +297,15 @@ enum GitPatchParser {
                 return .red
             case .context:
                 return .primary
+            }
+        }
+
+        var shouldSyntaxHighlight: Bool {
+            switch kind {
+            case .addition, .deletion, .context:
+                return !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            case .header, .hunk:
+                return false
             }
         }
     }
