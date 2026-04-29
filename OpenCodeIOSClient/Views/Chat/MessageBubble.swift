@@ -156,15 +156,21 @@ struct MessageBubble: View {
 
     private var modelLabel: String {
         guard let model = effectiveMessage.info.model else { return "Default" }
-        let base = "\(model.providerID)/\(model.modelID)"
-        guard let variant = model.variant?.nilIfEmpty else { return base }
-        return "\(base) (\(variant))"
+        return "\(model.providerID)/\(model.modelID)"
     }
 
     private var reasoningLabel: String {
+        if let variant = effectiveMessage.info.model?.variant?.nilIfEmpty {
+            return formattedReasoningVariant(variant)
+        }
+
         let reasoningParts = effectiveMessage.parts.filter { $0.type == "reasoning" && ($0.text?.nilIfEmpty != nil) }
         guard !reasoningParts.isEmpty else { return "None" }
         return reasoningParts.count == 1 ? "1 block" : "\(reasoningParts.count) blocks"
+    }
+
+    private func formattedReasoningVariant(_ variant: String) -> String {
+        variant.replacingOccurrences(of: "_", with: " ").capitalized
     }
 
     private func runEntryAnimationIfNeeded() {
