@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 #if canImport(PhotosUI)
 import PhotosUI
 import UniformTypeIdentifiers
@@ -12,6 +15,7 @@ struct MessageComposer: View {
     let isBusy: Bool
     let canFork: Bool
     let onInputFrameChange: (CGRect) -> Void
+    let onFocusChange: (Bool) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
     let onSelectCommand: (OpenCodeCommand) -> Void
@@ -189,6 +193,25 @@ struct MessageComposer: View {
                 Color.clear
                     .frame(width: 44, height: 44)
 
+                #if canImport(UIKit)
+                ComposerTextView(
+                    text: $text,
+                    placeholder: "Message",
+                    maxLines: 6,
+                    onFocusChange: onFocusChange,
+                    onInteraction: dismissAccessoryMenu
+                )
+                    .frame(minHeight: ComposerTextViewMetrics.minimumHeight)
+                    .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .opencodeGlassSurface(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .background {
+                        GeometryReader { geometry in
+                            Color.clear
+                                .preference(key: ComposerInputFramePreferenceKey.self, value: geometry.frame(in: .named("chat-view-space")))
+                        }
+                    }
+                    .accessibilityIdentifier("chat.input")
+                #else
                 TextField("Message", text: $text, axis: .vertical)
                     .lineLimit(1 ... 6)
                     .padding(.horizontal, 14)
@@ -202,12 +225,9 @@ struct MessageComposer: View {
                     }
                     .accessibilityIdentifier("chat.input")
                     .simultaneousGesture(TapGesture().onEnded {
-                        if isAccessoryMenuOpen {
-                            withAnimation(opencodeSelectionAnimation) {
-                                isAccessoryMenuOpen = false
-                            }
-                        }
+                        dismissAccessoryMenu()
                     })
+                #endif
 
                 Button(action: showsSendAction ? onSend : onStop) {
                     Image(systemName: showsSendAction ? "arrow.up" : "stop.fill")
@@ -240,6 +260,14 @@ struct MessageComposer: View {
             } else {
                 collapsedAccessoryButton
                     .transition(.identity)
+            }
+        }
+    }
+
+    private func dismissAccessoryMenu() {
+        if isAccessoryMenuOpen {
+            withAnimation(opencodeSelectionAnimation) {
+                isAccessoryMenuOpen = false
             }
         }
     }
@@ -469,6 +497,193 @@ struct MessageComposer: View {
     }
 #endif
 }
+
+#if canImport(UIKit)
+private enum ComposerTextViewMetrics {
+    static let horizontalInset: CGFloat = 14
+    static let verticalInset: CGFloat = 11
+    static let maxLines = 6
+
+    static var minimumHeight: CGFloat {
+        let font = UIFont.preferredFont(forTextStyle: .body)
+        return ceil(font.lineHeight + verticalInset * 2)
+    }
+}
+
+private struct ComposerTextView: UIViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    let maxLines: Int
+    let onFocusChange: (Bool) -> Void
+    let onInteraction: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeUIView(context: Context) -> ComposerPlaceholderTextView {
+        let textView = ComposerPlaceholderTextView()
+        textView.backgroundColor = .clear
+        textView.delegate = context.coordinator
+        textView.font = UIFont.preferredFont(forTextStyle: .body)
+        textView.adjustsFontForContentSizeCategory = true
+        textView.textColor = .label
+        textView.tintColor = .tintColor
+        textView.textContainer.lineFragmentPadding = 0
+        textView.textContainerInset = UIEdgeInsets(
+            top: ComposerTextViewMetrics.verticalInset,
+            left: ComposerTextViewMetrics.horizontalInset,
+            bottom: ComposerTextViewMetrics.verticalInset,
+            right: ComposerTextViewMetrics.horizontalInset
+        )
+        textView.returnKeyType = .default
+        textView.keyboardDismissMode = .interactive
+        textView.placeholder = placeholder
+        textView.text = text
+        textView.updatePlaceholderVisibility()
+        textView.isEditable = true
+        textView.isSelectable = true
+        return textView
+    }
+
+    func updateUIView(_ textView: ComposerPlaceholderTextView, context: Context) {
+        context.coordinator.parent = self
+        var needsLayoutUpdate = false
+
+        if textView.text != text {
+            textView.text = text
+            textView.updatePlaceholderVisibility()
+            needsLayoutUpdate = true
+        }
+
+        if textView.placeholder != placeholder {
+            textView.placeholder = placeholder
+            needsLayoutUpdate = true
+        }
+
+        let bodyFont = UIFont.preferredFont(forTextStyle: .body)
+        if textView.font != bodyFont {
+            textView.font = bodyFont
+            textView.updatePlaceholderFont()
+            needsLayoutUpdate = true
+        }
+
+        if textView.maximumLineCount != maxLines {
+            textView.maximumLineCount = maxLines
+            needsLayoutUpdate = true
+        }
+
+        guard needsLayoutUpdate else { return }
+
+        textView.updateScrolling(maxLines: maxLines)
+        textView.invalidateIntrinsicContentSize()
+        textView.setNeedsLayout()
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: ComposerPlaceholderTextView, context: Context) -> CGSize? {
+        guard let width = proposal.width, width > 0 else { return nil }
+        let height = uiView.fittedHeight(width: width, maxLines: maxLines)
+        return CGSize(width: width, height: height)
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: ComposerTextView
+
+        init(_ parent: ComposerTextView) {
+            self.parent = parent
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            parent.onInteraction()
+            parent.onFocusChange(true)
+        }
+
+        func textViewDidEndEditing(_ textView: UITextView) {
+            parent.onFocusChange(false)
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            if parent.text != textView.text {
+                parent.text = textView.text
+            }
+
+            guard let textView = textView as? ComposerPlaceholderTextView else { return }
+            textView.updatePlaceholderVisibility()
+            textView.updateScrolling(maxLines: parent.maxLines)
+            textView.invalidateIntrinsicContentSize()
+        }
+    }
+}
+
+private final class ComposerPlaceholderTextView: UITextView {
+    private let placeholderLabel = UILabel()
+    var maximumLineCount = ComposerTextViewMetrics.maxLines
+
+    var placeholder: String = "" {
+        didSet {
+            placeholderLabel.text = placeholder
+            updatePlaceholderVisibility()
+        }
+    }
+
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        setupPlaceholder()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let x = textContainerInset.left
+        let y = textContainerInset.top
+        let width = max(0, bounds.width - textContainerInset.left - textContainerInset.right)
+        placeholderLabel.frame = CGRect(x: x, y: y, width: width, height: placeholderLabel.intrinsicContentSize.height)
+    }
+
+    func updatePlaceholderFont() {
+        placeholderLabel.font = font
+        setNeedsLayout()
+    }
+
+    func updatePlaceholderVisibility() {
+        placeholderLabel.isHidden = !text.isEmpty
+    }
+
+    func fittedHeight(width: CGFloat, maxLines: Int) -> CGFloat {
+        let target = CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+        let measuredHeight = sizeThatFits(target).height
+        let lineHeight = (font ?? UIFont.preferredFont(forTextStyle: .body)).lineHeight
+        let minHeight = ceil(lineHeight + textContainerInset.top + textContainerInset.bottom)
+        let maxHeight = ceil(lineHeight * CGFloat(max(1, maxLines)) + textContainerInset.top + textContainerInset.bottom)
+        return min(max(measuredHeight, minHeight), maxHeight)
+    }
+
+    func updateScrolling(maxLines: Int) {
+        let width = bounds.width > 0 ? bounds.width : UIScreen.main.bounds.width - 110
+        let target = CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+        let measuredHeight = sizeThatFits(target).height
+        let lineHeight = (font ?? UIFont.preferredFont(forTextStyle: .body)).lineHeight
+        let maxHeight = ceil(lineHeight * CGFloat(max(1, maxLines)) + textContainerInset.top + textContainerInset.bottom)
+        isScrollEnabled = measuredHeight > maxHeight + 0.5
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.insetBy(dx: -8, dy: -8).contains(point)
+    }
+
+    private func setupPlaceholder() {
+        placeholderLabel.textColor = .placeholderText
+        placeholderLabel.font = font ?? UIFont.preferredFont(forTextStyle: .body)
+        placeholderLabel.numberOfLines = 1
+        placeholderLabel.isUserInteractionEnabled = false
+        addSubview(placeholderLabel)
+    }
+}
+#endif
 
 private struct ComposerInputFramePreferenceKey: PreferenceKey {
     static let defaultValue: CGRect = .zero

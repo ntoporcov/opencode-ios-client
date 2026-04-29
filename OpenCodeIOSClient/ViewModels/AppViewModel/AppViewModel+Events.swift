@@ -1,6 +1,25 @@
 import Foundation
 
 extension AppViewModel {
+    private static let streamDeltaCoalescingInterval: Duration = .milliseconds(50)
+
+    var isCapturingStreamingDiagnostics: Bool {
+        isShowingDebugProbe || isRunningDebugProbe
+    }
+
+    func setComposerStreamingFocus(_ isFocused: Bool) {
+        guard isComposerStreamingFocused != isFocused else { return }
+        isComposerStreamingFocused = isFocused
+
+        if !isFocused {
+            flushBufferedTranscript(reason: "composer blur")
+        }
+    }
+
+    func flushBufferedTranscript(reason: String) {
+        flushPendingTranscriptEvents(reason: reason)
+    }
+
     func startDebugProbe() async {
         guard let selectedSession else { return }
 
@@ -12,7 +31,7 @@ extension AppViewModel {
         appendDebugLog("probe started for \(selectedSession.id)")
         stopEventStream()
         startEventStream()
-        startDebugProbeStreams()
+        appendDebugLog("probe using shared app event stream")
         appendDebugLog("probe prompt: \(debugProbePrompt)")
         await sendMessage(debugProbePrompt, in: selectedSession, userVisible: true)
     }
@@ -47,14 +66,18 @@ extension AppViewModel {
             },
             onEvent: { [weak self] managed in
                 await MainActor.run {
-                    self?.appendDebugLog("event \(managed.envelope.type): \(managed.directory)")
-                    self?.handleManagedEvent(managed)
+                    guard let self else { return }
+                    if self.shouldLogEventDetails(for: managed.envelope.type) {
+                        self.appendDebugLog("event \(managed.envelope.type): \(managed.directory)")
+                    }
+                    self.handleManagedEvent(managed)
                 }
             }
         )
     }
 
     func stopEventStream() {
+        flushPendingTranscriptEvents(reason: "stream stop")
         reloadTask?.cancel()
         reloadTask = nil
         liveRefreshTask?.cancel()
@@ -105,8 +128,10 @@ extension AppViewModel {
     func handleManagedEvent(_ managed: OpenCodeManagedEvent) {
         guard isConnected else { return }
 
-        appendDebugLog(eventScopeSummary(for: managed))
-        appendDebugLog(eventIdentitySummary(for: managed.envelope))
+        if shouldLogEventDetails(for: managed.envelope.type) {
+            appendDebugLog(eventScopeSummary(for: managed))
+            appendDebugLog(eventIdentitySummary(for: managed.envelope))
+        }
 
         if OpenCodeStateReducer.applyGlobalEvent(event: managed.typed, projects: &projects, currentProject: &currentProject) {
             switch managed.typed {
@@ -137,6 +162,14 @@ extension AppViewModel {
                 messageID: managed.envelope.properties.messageID ?? managed.envelope.properties.part?.messageID ?? managed.envelope.properties.info?.id,
                 partID: managed.envelope.properties.partID ?? managed.envelope.properties.part?.id
             )
+        }
+
+        if enqueueSelectedTranscriptEventIfNeeded(managed) {
+            return
+        }
+
+        if shouldFlushPendingTranscriptEvents(before: managed) {
+            flushPendingTranscriptEvents(reason: "before \(managed.envelope.type)")
         }
 
         if case let .sessionError(sessionID, message) = managed.typed {
@@ -170,7 +203,7 @@ extension AppViewModel {
 
         switch result {
         case let .message(reason):
-            if let selectedSession {
+            if let selectedSession, shouldRefreshSessionPreview(for: payload.type) {
                 refreshSessionPreview(for: selectedSession.id, messages: directoryState.messages)
             }
             scheduleLiveActivityPreviewRefreshIfNeeded(for: managedEventSessionID(for: managed))
@@ -257,7 +290,137 @@ extension AppViewModel {
         }
 
         refreshLiveActivityIfNeeded(for: eventSessionID)
-        publishWidgetSnapshots()
+        if shouldPublishWidgetSnapshots(after: result) {
+            publishWidgetSnapshots()
+        }
+    }
+
+    private func shouldRefreshSessionPreview(for eventType: String) -> Bool {
+        eventType != "message.part.delta"
+    }
+
+    private func shouldPublishWidgetSnapshots(after result: SessionEventResult) -> Bool {
+        switch result {
+        case .sessionChanged, .todoChanged, .permissionChanged, .questionChanged, .statusChanged, .idle:
+            return true
+        case .message, .ignored:
+            return false
+        }
+    }
+
+    private func shouldLogEventDetails(for eventType: String) -> Bool {
+        guard isCapturingStreamingDiagnostics else { return false }
+        return eventType != "message.part.delta"
+    }
+
+    private func enqueueSelectedTranscriptEventIfNeeded(_ managed: OpenCodeManagedEvent) -> Bool {
+        guard shouldBufferTranscriptEvent(managed) else {
+            return false
+        }
+
+        pendingTranscriptEvents.append(
+            OpenCodePendingTranscriptEvent(
+                typedEvent: managed.typed,
+                eventType: managed.envelope.type,
+                sessionID: managedEventSessionID(for: managed),
+                messageID: managed.envelope.properties.messageID ?? managed.envelope.properties.part?.messageID ?? managed.envelope.properties.info?.id,
+                partID: managed.envelope.properties.partID ?? managed.envelope.properties.part?.id,
+                deltaCharacterCount: transcriptDeltaCharacterCount(for: managed),
+                enqueuedAt: Date()
+            )
+        )
+        triggerStreamPartHapticIfNeeded(for: managed)
+        scheduleStreamDeltaFlush()
+        return true
+    }
+
+    private func shouldBufferTranscriptEvent(_ managed: OpenCodeManagedEvent) -> Bool {
+        guard let selectedSessionID = selectedSession?.id else { return false }
+
+        switch managed.typed {
+        case let .messagePartDelta(sessionID, _, _, _, _):
+            return sessionID == selectedSessionID
+        default:
+            return false
+        }
+    }
+
+    private func shouldFlushPendingTranscriptEvents(before managed: OpenCodeManagedEvent) -> Bool {
+        !pendingTranscriptEvents.isEmpty
+    }
+
+    private func transcriptDeltaCharacterCount(for managed: OpenCodeManagedEvent) -> Int {
+        guard case let .messagePartDelta(_, _, _, _, delta) = managed.typed else { return 0 }
+        return delta.count
+    }
+
+    private func scheduleStreamDeltaFlush(rescheduling: Bool = false) {
+        if rescheduling {
+            streamDeltaFlushTask?.cancel()
+            streamDeltaFlushTask = nil
+        }
+
+        guard streamDeltaFlushTask == nil else { return }
+
+        streamDeltaFlushTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: Self.streamDeltaCoalescingInterval)
+            guard !Task.isCancelled else { return }
+            self?.flushPendingTranscriptEvents(reason: "timer")
+        }
+    }
+
+    private func flushPendingTranscriptEvents(reason: String) {
+        streamDeltaFlushTask?.cancel()
+        streamDeltaFlushTask = nil
+
+        guard !pendingTranscriptEvents.isEmpty else { return }
+
+        let now = Date()
+        let events = pendingTranscriptEvents
+        pendingTranscriptEvents = []
+
+        var nextDirectoryState = directoryState
+        var appliedCount = 0
+
+        for event in events {
+            let result = OpenCodeStateReducer.applyDirectoryEvent(
+                event: event.typedEvent,
+                state: &nextDirectoryState
+            )
+            if case .message = result {
+                appliedCount += 1
+            }
+        }
+
+        if nextDirectoryState != directoryState {
+            directoryState = nextDirectoryState
+        }
+
+        for sessionID in Set(events.compactMap(\.sessionID)) {
+            refreshLiveActivityIfNeeded(for: sessionID)
+        }
+
+        logStreamDeltaFlush(reason: reason, events: events, appliedCount: appliedCount, flushedAt: now)
+    }
+
+    private func logStreamDeltaFlush(reason: String, events: [OpenCodePendingTranscriptEvent], appliedCount: Int, flushedAt now: Date) {
+        guard isCapturingStreamingDiagnostics else {
+            streamDeltaLastFlushAt = now
+            return
+        }
+
+        let oldest = events.map(\.enqueuedAt).min() ?? now
+        let waitMS = Int(now.timeIntervalSince(oldest) * 1000)
+        let cadence = streamDeltaLastFlushAt
+            .map { "\(Int(now.timeIntervalSince($0) * 1000))ms" } ?? "first"
+        let chars = events.reduce(0) { $0 + $1.deltaCharacterCount }
+        let types = Set(events.map(\.eventType)).sorted().joined(separator: ",")
+        let target = "50ms"
+        streamDeltaLastFlushAt = now
+
+        appendDebugLog(
+            "transcript flush reason=\(reason) count=\(events.count) applied=\(appliedCount) chars=\(chars) wait=\(waitMS)ms cadence=\(cadence) target=\(target) focused=\(isComposerStreamingFocused) types=\(types)"
+        )
     }
 
     private func isLiveActivityMessageEvent(_ type: String) -> Bool {
@@ -449,6 +612,7 @@ extension AppViewModel {
 
     func scheduleReload(for session: OpenCodeSession) {
         reloadTask?.cancel()
+
         reloadTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(150))
             guard let self, self.isConnected else { return }
@@ -552,6 +716,8 @@ extension AppViewModel {
     }
 
     func appendDebugLog(_ message: String) {
+        guard isCapturingStreamingDiagnostics else { return }
+
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm:ss.SSS"
         let stamped = "[\(formatter.string(from: Date()))] \(message)"
@@ -570,6 +736,8 @@ extension AppViewModel {
         messageID: String? = nil,
         partID: String? = nil
     ) {
+        guard isCapturingStreamingDiagnostics else { return }
+
         let breadcrumb = OpenCodeChatBreadcrumb(
             event: event,
             sessionID: sessionID,

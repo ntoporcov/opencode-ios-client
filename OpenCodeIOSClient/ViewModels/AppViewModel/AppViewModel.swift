@@ -5,6 +5,16 @@ let opencodeSelectionAnimation = Animation.snappy(duration: 0.28, extraBounce: 0
 let defaultAppleIntelligenceUserInstructions = ""
 let defaultAppleIntelligenceSystemInstructions = ""
 
+struct OpenCodePendingTranscriptEvent: Sendable {
+    let typedEvent: OpenCodeTypedEvent
+    let eventType: String
+    let sessionID: String?
+    let messageID: String?
+    let partID: String?
+    let deltaCharacterCount: Int
+    let enqueuedAt: Date
+}
+
 @MainActor
 final class AppViewModel: ObservableObject {
     enum SavedServerEditorMode: Equatable {
@@ -83,7 +93,7 @@ final class AppViewModel: ObservableObject {
     @Published var isShowingCreateSessionSheet = false
     @Published var isShowingConfigurationsSheet = false
     @Published var isShowingForkSessionSheet = false
-    @Published var debugLastEventSummary = ""
+    var debugLastEventSummary = ""
     @Published var debugProbeLog: [String] = []
     @Published var chatBreadcrumbs: [OpenCodeChatBreadcrumb] = []
     @Published var isShowingDebugProbe = false
@@ -127,6 +137,10 @@ final class AppViewModel: ObservableObject {
     var lastFallbackAssistantLength = 0
     var nextStreamPartHapticAllowedAt = Date.distantPast
     var liveActivityPreviewRefreshTasksBySessionID: [String: Task<Void, Never>] = [:]
+    var pendingTranscriptEvents: [OpenCodePendingTranscriptEvent] = []
+    var streamDeltaFlushTask: Task<Void, Never>?
+    var streamDeltaLastFlushAt: Date?
+    var isComposerStreamingFocused = false
     #if canImport(ActivityKit) && os(iOS)
     var liveActivityRefreshTasksBySessionID: [String: Task<Void, Never>] = [:]
     var lastLiveActivityStatesBySessionID: [String: OpenCodeChatActivityAttributes.ContentState] = [:]
@@ -207,8 +221,12 @@ final class AppViewModel: ObservableObject {
 
     var messages: [OpenCodeMessageEnvelope] { directoryState.messages }
     var commands: [OpenCodeCommand] {
+        commands(canFork: selectedSession != nil && !forkableMessages.isEmpty)
+    }
+
+    func commands(canFork: Bool) -> [OpenCodeCommand] {
         var result = directoryState.commands
-        if selectedSession != nil, !forkableMessages.isEmpty, !result.contains(where: { $0.name == "fork" }) {
+        if selectedSession != nil, canFork, !result.contains(where: { $0.name == "fork" }) {
             result.append(Self.forkClientCommand)
         }
         return result
