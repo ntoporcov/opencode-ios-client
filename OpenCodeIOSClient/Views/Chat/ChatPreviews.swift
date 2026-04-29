@@ -117,7 +117,7 @@ private struct MessageComposerPreviewHost: View {
 
 #Preview("Markdown Message") {
     MarkdownMessageText(
-        text: "Added **previews** for the sidebar, session list, and chat building blocks.",
+        text: "# Release Notes\nAdded **previews** for the sidebar, session list, and chat building blocks.\n\n> Block quotes now render as distinct quoted panels.\n> They preserve *inline* formatting across multiple quoted lines.\n\n## Markdown Coverage\nHeadings now render as block elements while preserving *inline* formatting.\n\n- Unordered list item with **bold** text\n- Another bullet item\n\n1. Ordered item\n2. Ordered item with *emphasis*\n\n- [x] Completed checkbox\n- [ ] Pending checkbox\n\n| Feature | Status | Notes |\n| --- | --- | --- |\n| Headings | Done | H1-H3 |\n| Tables | Added | Inline **markdown** works |\n\n### Next\nAdd code blocks and links.",
         isUser: false,
         style: .standard
     )

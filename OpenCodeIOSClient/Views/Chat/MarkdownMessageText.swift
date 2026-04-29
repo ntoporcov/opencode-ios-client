@@ -6,6 +6,27 @@ struct MarkdownMessageText: View {
         case reasoning
     }
 
+    private enum MarkdownBlock: Identifiable {
+        case text(id: Int, value: String)
+        case heading(id: Int, level: Int, value: String)
+        case blockQuote(id: Int, value: String)
+        case listItem(id: Int, marker: ListMarker, value: String)
+        case table(id: Int, headers: [String], rows: [[String]])
+
+        var id: Int {
+            switch self {
+            case let .text(id, _), let .heading(id, _, _), let .blockQuote(id, _), let .listItem(id, _, _), let .table(id, _, _):
+                return id
+            }
+        }
+    }
+
+    private enum ListMarker {
+        case unordered
+        case ordered(String)
+        case checkbox(isChecked: Bool)
+    }
+
     let text: String
     let isUser: Bool
     let style: Style
@@ -21,14 +42,25 @@ struct MarkdownMessageText: View {
     }
 
     private var content: some View {
-        if let attributed = try? AttributedString(
-            markdown: text,
-            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
-            styledText(Text(attributed))
-        } else {
-            styledText(Text(text))
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(blocks) { block in
+                switch block {
+                case let .text(_, value):
+                    styledText(markdownText(value))
+                        .padding(.bottom, textBlockBottomPadding(for: value))
+                case let .heading(_, level, value):
+                    styledHeading(markdownText(value), level: level)
+                case let .blockQuote(_, value):
+                    styledBlockQuote(markdownText(value))
+                case let .listItem(_, marker, value):
+                    styledListItem(markdownText(value), marker: marker)
+                case let .table(_, headers, rows):
+                    styledTable(headers: headers, rows: rows)
+                }
+            }
         }
+        .frame(maxWidth: isUser ? nil : .infinity, alignment: .leading)
+        .textSelection(.enabled)
     }
 
     private func styledText(_ text: Text) -> some View {
@@ -38,8 +70,310 @@ struct MarkdownMessageText: View {
             .lineSpacing(textLineSpacing)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: isUser ? nil : .infinity, alignment: .leading)
-            .textSelection(.enabled)
+    }
+
+    private func styledHeading(_ text: Text, level: Int) -> some View {
+        text
+            .font(headingFont(level: level))
+            .foregroundStyle(textForegroundStyle)
+            .lineSpacing(textLineSpacing)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, headingTopPadding(level: level))
+            .padding(.bottom, headingBottomPadding(level: level))
+    }
+
+    private func styledBlockQuote(_ text: Text) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                .fill(blockQuoteAccentStyle)
+                .frame(width: 3)
+
+            styledText(text)
+                .foregroundStyle(blockQuoteForegroundStyle)
+        }
+        .padding(.vertical, blockQuoteVerticalPadding)
+        .padding(.horizontal, 10)
+        .background(blockQuoteBackgroundStyle, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.vertical, blockQuoteOuterPadding)
+    }
+
+    private func styledListItem(_ text: Text, marker: ListMarker) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            listMarkerView(marker)
+                .frame(width: listMarkerWidth(for: marker), alignment: .trailing)
+
+            styledText(text)
+        }
+        .padding(.vertical, listItemVerticalPadding)
+    }
+
+    private func styledTable(headers: [String], rows: [[String]]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                tableRow(headers, isHeader: true)
+
+                ForEach(rows.indices, id: \.self) { rowIndex in
+                    Divider()
+                        .overlay(tableDividerStyle)
+
+                    tableRow(rows[rowIndex], isHeader: false)
+                }
+            }
+            .background(tableBackgroundStyle, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(tableBorderStyle, lineWidth: 1)
+            }
+        }
+        .padding(.vertical, tableOuterPadding)
+    }
+
+    private func tableRow(_ cells: [String], isHeader: Bool) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            ForEach(cells.indices, id: \.self) { columnIndex in
+                tableCell(cells[columnIndex], isHeader: isHeader)
+
+                if columnIndex < cells.count - 1 {
+                    Rectangle()
+                        .fill(tableDividerStyle)
+                        .frame(width: 1)
+                }
+            }
+        }
+        .background(isHeader ? tableHeaderBackgroundStyle : .clear)
+    }
+
+    private func tableCell(_ value: String, isHeader: Bool) -> some View {
+        markdownText(value)
+            .font(isHeader ? tableHeaderFont : textFont)
+            .foregroundStyle(isHeader ? tableHeaderForegroundStyle : textForegroundStyle)
+            .lineSpacing(textLineSpacing)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(minWidth: tableCellMinWidth, maxWidth: tableCellMaxWidth, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, isHeader ? 8 : 7)
+    }
+
+    @ViewBuilder
+    private func listMarkerView(_ marker: ListMarker) -> some View {
+        switch marker {
+        case .unordered:
+            Text("•")
+                .font(listMarkerFont)
+                .foregroundStyle(listMarkerForegroundStyle)
+        case let .ordered(value):
+            Text(value)
+                .font(listMarkerFont)
+                .foregroundStyle(listMarkerForegroundStyle)
+        case let .checkbox(isChecked):
+            Image(systemName: isChecked ? "checkmark.square.fill" : "square")
+                .font(checkboxMarkerFont)
+                .foregroundStyle(isChecked ? checkboxCheckedForegroundStyle : listMarkerForegroundStyle)
+        }
+    }
+
+    private func markdownText(_ value: String) -> Text {
+        if let attributed = try? AttributedString(
+            markdown: value,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        ) {
+            return Text(attributed)
+        }
+
+        return Text(value)
+    }
+
+    private var blocks: [MarkdownBlock] {
+        let lines = text.components(separatedBy: .newlines)
+        var result: [MarkdownBlock] = []
+        var index = 0
+        var id = 0
+
+        while index < lines.count {
+            let line = lines[index]
+
+            if let table = markdownTable(in: lines, startingAt: index) {
+                result.append(.table(id: id, headers: table.headers, rows: table.rows))
+                id += 1
+                index = table.nextIndex
+                continue
+            }
+
+            if let quote = blockQuoteLine(from: line) {
+                var values = [quote]
+                index += 1
+
+                while index < lines.count, let nextQuote = blockQuoteLine(from: lines[index]) {
+                    values.append(nextQuote)
+                    index += 1
+                }
+
+                result.append(.blockQuote(id: id, value: values.joined(separator: "\n")))
+                id += 1
+                continue
+            }
+
+            if let heading = heading(from: line) {
+                result.append(.heading(id: id, level: heading.level, value: heading.value))
+            } else if let item = listItem(from: line) {
+                result.append(.listItem(id: id, marker: item.marker, value: item.value))
+            } else {
+                result.append(.text(id: id, value: line))
+            }
+
+            id += 1
+            index += 1
+        }
+
+        return result
+    }
+
+    private func heading(from line: String) -> (level: Int, value: String)? {
+        for level in 1...3 {
+            let marker = String(repeating: "#", count: level) + " "
+            guard line.hasPrefix(marker) else { continue }
+
+            let value = String(line.dropFirst(marker.count)).trimmingCharacters(in: .whitespaces)
+            guard !value.isEmpty else { return nil }
+
+            return (level, value)
+        }
+
+        return nil
+    }
+
+    private func listItem(from line: String) -> (marker: ListMarker, value: String)? {
+        if let checkbox = checkboxListItem(from: line) {
+            return checkbox
+        }
+
+        if let unordered = unorderedListItem(from: line) {
+            return unordered
+        }
+
+        return orderedListItem(from: line)
+    }
+
+    private func checkboxListItem(from line: String) -> (marker: ListMarker, value: String)? {
+        let prefixes: [(prefix: String, isChecked: Bool)] = [
+            ("- [ ] ", false),
+            ("- [x] ", true),
+            ("- [X] ", true),
+            ("* [ ] ", false),
+            ("* [x] ", true),
+            ("* [X] ", true),
+            ("+ [ ] ", false),
+            ("+ [x] ", true),
+            ("+ [X] ", true)
+        ]
+
+        for prefix in prefixes where line.hasPrefix(prefix.prefix) {
+            let value = String(line.dropFirst(prefix.prefix.count)).trimmingCharacters(in: .whitespaces)
+            guard !value.isEmpty else { return nil }
+            return (.checkbox(isChecked: prefix.isChecked), value)
+        }
+
+        return nil
+    }
+
+    private func unorderedListItem(from line: String) -> (marker: ListMarker, value: String)? {
+        for prefix in ["- ", "* ", "+ "] where line.hasPrefix(prefix) {
+            let value = String(line.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+            guard !value.isEmpty else { return nil }
+            return (.unordered, value)
+        }
+
+        return nil
+    }
+
+    private func orderedListItem(from line: String) -> (marker: ListMarker, value: String)? {
+        guard let dotIndex = line.firstIndex(of: ".") else { return nil }
+
+        let number = String(line[..<dotIndex])
+        guard !number.isEmpty, number.allSatisfy(\.isNumber) else { return nil }
+
+        let valueStart = line.index(after: dotIndex)
+        guard valueStart < line.endIndex, line[valueStart] == " " else { return nil }
+
+        let value = String(line[line.index(after: valueStart)...]).trimmingCharacters(in: .whitespaces)
+        guard !value.isEmpty else { return nil }
+
+        return (.ordered("\(number)."), value)
+    }
+
+    private func markdownTable(in lines: [String], startingAt startIndex: Int) -> (headers: [String], rows: [[String]], nextIndex: Int)? {
+        guard startIndex + 1 < lines.count,
+              let headers = tableCells(from: lines[startIndex]),
+              isTableSeparator(lines[startIndex + 1]) else {
+            return nil
+        }
+
+        var rows: [[String]] = []
+        var index = startIndex + 2
+
+        while index < lines.count, let cells = tableCells(from: lines[index]), !isTableSeparator(lines[index]) {
+            rows.append(normalizedTableRow(cells, count: headers.count))
+            index += 1
+        }
+
+        guard !rows.isEmpty else { return nil }
+        return (headers, rows, index)
+    }
+
+    private func tableCells(from line: String) -> [String]? {
+        guard line.contains("|") else { return nil }
+
+        var value = line.trimmingCharacters(in: .whitespaces)
+        if value.hasPrefix("|") {
+            value.removeFirst()
+        }
+        if value.hasSuffix("|") {
+            value.removeLast()
+        }
+
+        let cells = value
+            .split(separator: "|", omittingEmptySubsequences: false)
+            .map { String($0).trimmingCharacters(in: .whitespaces) }
+
+        guard cells.count >= 2, cells.contains(where: { !$0.isEmpty }) else { return nil }
+        return cells
+    }
+
+    private func isTableSeparator(_ line: String) -> Bool {
+        guard let cells = tableCells(from: line) else { return false }
+
+        return cells.allSatisfy { cell in
+            let trimmed = cell.trimmingCharacters(in: .whitespaces)
+            guard trimmed.contains("-"), trimmed.count >= 3 else { return false }
+            return trimmed.allSatisfy { character in
+                character == "-" || character == ":"
+            }
+        }
+    }
+
+    private func normalizedTableRow(_ cells: [String], count: Int) -> [String] {
+        if cells.count == count {
+            return cells
+        }
+
+        if cells.count > count {
+            return Array(cells.prefix(count))
+        }
+
+        return cells + Array(repeating: "", count: count - cells.count)
+    }
+
+    private func blockQuoteLine(from line: String) -> String? {
+        guard line.hasPrefix(">") else { return nil }
+
+        let value = String(line.dropFirst())
+        if value.hasPrefix(" ") {
+            return String(value.dropFirst())
+        }
+
+        return value
     }
 
     private var textFont: Font {
@@ -48,6 +382,29 @@ struct MarkdownMessageText: View {
             return .body
         case .reasoning:
             return .caption
+        }
+    }
+
+    private func headingFont(level: Int) -> Font {
+        switch style {
+        case .standard:
+            switch level {
+            case 1:
+                return .title3.weight(.bold)
+            case 2:
+                return .headline.weight(.bold)
+            default:
+                return .subheadline.weight(.semibold)
+            }
+        case .reasoning:
+            switch level {
+            case 1:
+                return .subheadline.weight(.bold)
+            case 2:
+                return .caption.weight(.bold)
+            default:
+                return .caption.weight(.semibold)
+            }
         }
     }
 
@@ -64,12 +421,173 @@ struct MarkdownMessageText: View {
         }
     }
 
+    private var blockQuoteForegroundStyle: Color {
+        isUser ? .white.opacity(0.86) : .secondary
+    }
+
+    private var blockQuoteAccentStyle: Color {
+        isUser ? .white.opacity(0.55) : .secondary.opacity(0.45)
+    }
+
+    private var blockQuoteBackgroundStyle: Color {
+        isUser ? .white.opacity(0.12) : .secondary.opacity(0.09)
+    }
+
+    private var listMarkerForegroundStyle: Color {
+        isUser ? .white.opacity(0.78) : .secondary
+    }
+
+    private var checkboxCheckedForegroundStyle: Color {
+        isUser ? .white : .accentColor
+    }
+
+    private var tableHeaderForegroundStyle: Color {
+        isUser ? .white : .primary
+    }
+
+    private var tableBackgroundStyle: Color {
+        isUser ? .white.opacity(0.08) : .secondary.opacity(0.06)
+    }
+
+    private var tableHeaderBackgroundStyle: Color {
+        isUser ? .white.opacity(0.12) : .secondary.opacity(0.11)
+    }
+
+    private var tableBorderStyle: Color {
+        isUser ? .white.opacity(0.18) : .secondary.opacity(0.2)
+    }
+
+    private var tableDividerStyle: Color {
+        isUser ? .white.opacity(0.16) : .secondary.opacity(0.18)
+    }
+
     private var textLineSpacing: CGFloat {
         switch style {
         case .standard:
             return isUser ? 1 : 3
         case .reasoning:
             return 2
+        }
+    }
+
+    private func headingTopPadding(level: Int) -> CGFloat {
+        switch style {
+        case .standard:
+            return level == 1 ? 8 : 6
+        case .reasoning:
+            return 4
+        }
+    }
+
+    private func headingBottomPadding(level: Int) -> CGFloat {
+        switch style {
+        case .standard:
+            return level == 1 ? 6 : 4
+        case .reasoning:
+            return 3
+        }
+    }
+
+    private func textBlockBottomPadding(for value: String) -> CGFloat {
+        value.isEmpty ? textFontLinePadding : 0
+    }
+
+    private var textFontLinePadding: CGFloat {
+        switch style {
+        case .standard:
+            return 7
+        case .reasoning:
+            return 5
+        }
+    }
+
+    private var blockQuoteVerticalPadding: CGFloat {
+        switch style {
+        case .standard:
+            return 8
+        case .reasoning:
+            return 6
+        }
+    }
+
+    private var blockQuoteOuterPadding: CGFloat {
+        switch style {
+        case .standard:
+            return 4
+        case .reasoning:
+            return 3
+        }
+    }
+
+    private var listMarkerFont: Font {
+        switch style {
+        case .standard:
+            return .body.weight(.semibold)
+        case .reasoning:
+            return .caption.weight(.semibold)
+        }
+    }
+
+    private var checkboxMarkerFont: Font {
+        switch style {
+        case .standard:
+            return .body
+        case .reasoning:
+            return .caption
+        }
+    }
+
+    private func listMarkerWidth(for marker: ListMarker) -> CGFloat {
+        switch marker {
+        case .unordered, .checkbox:
+            return 18
+        case let .ordered(value):
+            return max(22, CGFloat(value.count) * 8)
+        }
+    }
+
+    private var listItemVerticalPadding: CGFloat {
+        switch style {
+        case .standard:
+            return 2
+        case .reasoning:
+            return 1
+        }
+    }
+
+    private var tableHeaderFont: Font {
+        switch style {
+        case .standard:
+            return .body.weight(.semibold)
+        case .reasoning:
+            return .caption.weight(.semibold)
+        }
+    }
+
+    private var tableCellMinWidth: CGFloat {
+        switch style {
+        case .standard:
+            return 96
+        case .reasoning:
+            return 82
+        }
+    }
+
+    private var tableCellMaxWidth: CGFloat {
+        switch style {
+        case .standard:
+            return 180
+        case .reasoning:
+            return 150
+        }
+    }
+
+    private var tableOuterPadding: CGFloat {
+        switch style {
+        case .standard:
+            return 5
+        case .reasoning:
+            return 4
         }
     }
 }
