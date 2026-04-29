@@ -603,7 +603,7 @@ struct MessageBubble: View {
             )
         case "mcp":
             return ActivityStyle(
-                title: "MCP",
+                title: firstNonEmpty(part.state?.title, "MCP") ?? "MCP",
                 subtitle: toolSubtitle(for: part, fallback: nil),
                 icon: "point.3.connected.trianglepath.dotted",
                 tint: .pink,
@@ -612,7 +612,7 @@ struct MessageBubble: View {
                 shimmerTitle: false
             )
         default:
-            let title = part.state?.title ?? displayTitle(for: tool, fallback: part.type)
+            let title = firstNonEmpty(part.state?.title, displayTitle(for: tool, fallback: part.type)) ?? "Tool"
             return ActivityStyle(
                 title: title,
                 subtitle: firstNonEmpty(part.state?.input?.description, toolSubtitle(for: part, fallback: nil)),
@@ -652,11 +652,12 @@ struct MessageBubble: View {
     }
 
     private func displayTitle(for tool: String, fallback: String) -> String {
-        guard let first = tool.first else {
-            return fallback.replacingOccurrences(of: "_", with: " ").capitalized
-        }
-
-        return String(first).uppercased() + tool.dropFirst()
+        let value = firstNonEmpty(tool, fallback) ?? "tool"
+        return value
+            .replacingOccurrences(of: "_", with: " ")
+            .replacingOccurrences(of: "-", with: " ")
+            .replacingOccurrences(of: ".", with: " ")
+            .capitalized
     }
 
     private func contextSummary(for parts: [IndexedPart]) -> ContextSummary {
