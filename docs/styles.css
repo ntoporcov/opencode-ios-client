@@ -1,12 +1,12 @@
 :root {
   color-scheme: light;
-  --bg: #f5f7ff;
+  --bg: #ffffff;
   --panel: rgba(255, 255, 255, 0.86);
   --panel-border: rgba(17, 24, 39, 0.08);
-  --text: #111827;
-  --muted: #4b5563;
-  --accent: #325cff;
-  --accent-2: #6d4dff;
+  --text: #18181b;
+  --muted: #5f646d;
+  --accent: #18181b;
+  --accent-2: #52525b;
   --card: rgba(17, 24, 39, 0.03);
   --max: 1100px;
 }
@@ -22,10 +22,7 @@ html {
 body {
   margin: 0;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(122, 162, 255, 0.2), transparent 28%),
-    radial-gradient(circle at 80% 4%, rgba(139, 125, 255, 0.18), transparent 30%),
-    var(--bg);
+  background: linear-gradient(180deg, #ffffff 0%, #eeeeef 44%, #c8c8cf 100%);
   color: var(--text);
   line-height: 1.6;
 }
@@ -63,21 +60,34 @@ a:hover {
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--text);
 }
 
+.brand img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  box-shadow: 0 4px 12px rgba(24, 24, 27, 0.12);
+}
+
 .nav {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   flex-wrap: wrap;
+  font-size: 0.9rem;
+  font-weight: 550;
 }
 
 .hero {
   position: relative;
   overflow: hidden;
-  padding: 74px 0 54px;
+  padding: 74px 0 96px;
 }
 
 .hero::before {
@@ -86,11 +96,8 @@ a:hover {
   height: 62%;
   content: "";
   pointer-events: none;
-  background:
-    radial-gradient(circle at 50% 42%, rgba(122, 162, 255, 0.28), transparent 34%),
-    radial-gradient(circle at 36% 58%, rgba(61, 220, 255, 0.13), transparent 30%),
-    radial-gradient(circle at 64% 62%, rgba(139, 125, 255, 0.2), transparent 34%);
-  filter: blur(8px);
+  background: radial-gradient(circle at 50% 54%, rgba(24, 24, 27, 0.08), transparent 42%);
+  filter: blur(10px);
 }
 
 .hero-inner {
@@ -105,18 +112,22 @@ a:hover {
 }
 
 .hero-kicker {
+  display: inline-block;
   margin-bottom: 10px;
   font-size: clamp(1.05rem, 2vw, 1.35rem);
   font-weight: 750;
   letter-spacing: -0.02em;
-  color: var(--accent);
+  color: transparent;
+  background: linear-gradient(90deg, #0057ff 0%, #22a7ff 48%, #007aff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 
 .hero-title {
   max-width: 820px;
   margin: 0 auto 18px;
   font-size: clamp(3.2rem, 8vw, 6.8rem);
-  letter-spacing: -0.075em;
+  letter-spacing: -0.055em;
 }
 
 .hero-subtitle {
@@ -138,27 +149,8 @@ a:hover {
 .hero-showcase {
   position: relative;
   width: min(100%, 1060px);
-  height: clamp(430px, 50vw, 650px);
+  height: clamp(540px, 56vw, 760px);
   margin: 78px auto 0;
-}
-
-.hero-showcase::before {
-  position: absolute;
-  left: 50%;
-  bottom: 6%;
-  width: 72%;
-  height: 58%;
-  content: "";
-  transform: translateX(-50%);
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 999px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.03)),
-    rgba(255, 255, 255, 0.03);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
-    0 28px 90px rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(24px);
 }
 
 .hero-phone {
@@ -167,16 +159,18 @@ a:hover {
   left: 50%;
   display: block;
   width: clamp(170px, 20vw, 270px);
+  max-height: 92%;
   height: auto;
   border-radius: 34px;
   box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.34),
-    0 0 0 1px rgba(255, 255, 255, 0.12);
+    0 20px 60px rgba(24, 24, 27, 0.2),
+    0 0 0 1px rgba(24, 24, 27, 0.1);
 }
 
 .hero-phone-main {
   z-index: 5;
   width: clamp(220px, 25vw, 340px);
+  max-height: 100%;
   transform: translateX(-50%);
 }
 
@@ -204,6 +198,110 @@ a:hover {
 
 .feature-grid {
   padding: 18px 0 40px;
+}
+
+.snap-section {
+  padding: 36px 0 92px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #fbfbfc 0%, #f7f7f8 100%);
+}
+
+.snap-intro {
+  margin-bottom: 58px;
+}
+
+.section-kicker {
+  margin-bottom: 12px;
+  color: var(--text);
+  font-size: clamp(1.05rem, 2vw, 1.35rem);
+  font-weight: 760;
+  letter-spacing: -0.03em;
+}
+
+.snap-intro h2 {
+  max-width: 760px;
+  margin-bottom: 24px;
+  font-size: clamp(3rem, 7vw, 5.3rem);
+  letter-spacing: -0.06em;
+}
+
+.snap-intro p {
+  max-width: 760px;
+  margin: 0;
+  color: #6f737b;
+  font-size: clamp(1.2rem, 2.3vw, 1.65rem);
+  font-weight: 650;
+  letter-spacing: -0.045em;
+  line-height: 1.18;
+}
+
+.snap-gallery {
+  display: flex;
+  gap: 20px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: max(16px, calc((100vw - var(--max)) / 2));
+  scroll-snap-type: x mandatory;
+  padding: 0 max(16px, calc((100vw - var(--max)) / 2)) 12px;
+  scrollbar-width: none;
+}
+
+.snap-gallery::-webkit-scrollbar {
+  display: none;
+}
+
+.snap-card {
+  flex: 0 0 clamp(320px, 29vw, 420px);
+  scroll-snap-align: start;
+}
+
+.snap-card-ipad {
+  flex-basis: clamp(250px, 23vw, 330px);
+}
+
+.snap-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 360px;
+  margin-bottom: 22px;
+  padding: 24px;
+  overflow: hidden;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow:
+    inset 0 0 0 1px rgba(24, 24, 27, 0.04),
+    0 18px 54px rgba(24, 24, 27, 0.08);
+}
+
+.snap-visual img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  border-radius: 26px;
+  box-shadow: 0 16px 42px rgba(24, 24, 27, 0.14);
+}
+
+.snap-card-ipad .snap-visual img {
+  width: auto;
+  max-width: none;
+  height: 100%;
+  object-fit: contain;
+}
+
+.snap-card p {
+  margin: 0;
+  padding: 0 10px;
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1.45;
+  letter-spacing: -0.018em;
+}
+
+.snap-card p strong {
+  font-weight: 760;
 }
 
 .bento-grid {
@@ -312,14 +410,27 @@ h2 {
   border-radius: 999px;
   font-weight: 600;
   border: 1px solid var(--panel-border);
-  background: var(--card);
+  background: rgba(255, 255, 255, 0.68);
   color: var(--text);
+  box-shadow: 0 10px 26px rgba(24, 24, 27, 0.08);
 }
 
 .button.primary {
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: #18181b;
   color: white;
   border-color: transparent;
+}
+
+.app-store-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 48px;
+}
+
+.app-store-badge img {
+  display: block;
+  width: 144px;
+  height: auto;
 }
 
 .device-shot {
@@ -464,7 +575,7 @@ code {
 
 @media (max-width: 860px) {
   .hero {
-    padding: 56px 0 28px;
+    padding: 56px 0 70px;
   }
 
   .hero-title {
@@ -476,19 +587,15 @@ code {
     margin-top: 56px;
   }
 
-  .hero-showcase::before {
-    width: 92%;
-    height: 56%;
-    bottom: 8%;
-  }
-
   .hero-phone {
     width: clamp(150px, 40vw, 230px);
+    max-height: 88%;
     border-radius: 28px;
   }
 
   .hero-phone-main {
     width: clamp(190px, 52vw, 280px);
+    max-height: 100%;
   }
 
   .hero-phone-left-inner {
@@ -502,6 +609,39 @@ code {
   .hero-phone-left-outer,
   .hero-phone-right-outer {
     display: none;
+  }
+
+  .snap-section {
+    padding: 26px 0 70px;
+  }
+
+  .snap-intro {
+    margin-bottom: 36px;
+  }
+
+  .snap-intro h2 {
+    font-size: clamp(2.6rem, 13vw, 4.4rem);
+  }
+
+  .snap-intro p {
+    font-size: clamp(1.12rem, 5vw, 1.45rem);
+  }
+
+  .snap-gallery {
+    gap: 16px;
+  }
+
+  .snap-card {
+    flex-basis: min(84vw, 340px);
+  }
+
+  .snap-card-ipad {
+    flex-basis: min(76vw, 280px);
+  }
+
+  .snap-visual {
+    height: 340px;
+    padding: 18px;
   }
 
   .bento-grid {
@@ -549,5 +689,14 @@ code {
 
   .hero-phone-right-inner {
     transform: translateX(-24%) translateY(62px) rotate(5deg);
+  }
+
+  .snap-visual {
+    height: 300px;
+    border-radius: 22px;
+  }
+
+  .snap-card p {
+    padding: 0 4px;
   }
 }
