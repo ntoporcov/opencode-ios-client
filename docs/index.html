@@ -10,10 +10,12 @@
   <body>
     <header class="site-header">
       <div class="wrap">
-        <a class="brand" href="./">OpenClient</a>
+        <a class="brand" href="./">
+          <img src="./images/app-icon.png" alt="" aria-hidden="true">
+          <span>OpenClient</span>
+        </a>
         <nav class="nav" aria-label="Primary">
           <a href="#features">Features</a>
-          <a href="#self-hosted">Self-Hosted</a>
           <a href="https://github.com/ntoporcov/openclient">GitHub</a>
           <a href="./privacy/">Privacy</a>
         </nav>
@@ -21,7 +23,7 @@
     </header>
 
     <main>
-      <section class="hero" id="features">
+      <section class="hero">
         <div class="wrap hero-inner">
           <div class="hero-intro">
             <div class="hero-kicker">OpenClient for iOS</div>
@@ -30,8 +32,9 @@
               Continue sessions, answer prompts, and keep your self-hosted OpenCode work moving from iPhone and iPad.
             </p>
             <div class="hero-actions">
-              <a class="button primary" href="https://github.com/ntoporcov/openclient">View on GitHub</a>
-              <a class="button" href="./privacy/">Privacy Policy</a>
+              <a class="app-store-badge" href="#" aria-label="Download OpenClient on the App Store, coming soon">
+                <img src="./images/download-on-the-app-store.svg" alt="Download on the App Store">
+              </a>
             </div>
           </div>
 
@@ -45,61 +48,63 @@
         </div>
       </section>
 
-      <section class="feature-grid">
-        <div class="wrap bento-grid">
-          <article class="panel bento-card bento-story">
-            <div class="eyebrow">Self-hosted by design</div>
-            <h2>Bring your OpenCode server with you.</h2>
-            <p class="muted">OpenClient is a native iPhone and iPad companion for self-hosted OpenCode. Check sessions, continue chats, and answer prompts without going back to your desk.</p>
-          </article>
+      <section class="snap-section" id="features">
+        <div class="wrap snap-intro">
+          <div class="section-kicker">Made for active OpenCode work</div>
+          <h2>Keep every session within reach.</h2>
+          <p>
+            OpenClient brings your self-hosted OpenCode server into native iOS surfaces, from full conversations to glanceable widgets and Live Activities.
+          </p>
+        </div>
 
-          <article class="panel bento-card bento-shot">
-            <img class="device-shot portrait-shot" src="./images/sessions.png" alt="OpenClient sessions screen on iPhone">
-            <div class="gallery-caption">
-              <strong>Resume sessions fast</strong>
-              Browse active work and jump straight back into the session that needs you.
+        <div class="snap-gallery" aria-label="OpenClient feature screenshots">
+          <article class="snap-card">
+            <div class="snap-visual">
+              <img src="./images/hero-chat.png" alt="OpenClient chat screen on iPhone">
             </div>
+            <p><strong>Continue the conversation.</strong> Review messages, follow tool activity, and send the next instruction without returning to your desk.</p>
           </article>
 
-          <article class="panel bento-card bento-question">
-            <img class="device-shot portrait-shot" src="./images/question.png" alt="OpenClient question prompt on iPhone">
-            <div class="gallery-caption">
-              <strong>Reply when the server asks</strong>
-              Permission and question prompts stay attached to the session you were following.
+          <article class="snap-card snap-card-ipad">
+            <div class="snap-visual">
+              <img src="./images/ipad-chat-rotated.png" alt="OpenClient three-column chat layout on iPad">
             </div>
+            <p><strong>Use the room on iPad.</strong> Split navigation keeps projects, sessions, and chat context visible while you move through active work.</p>
           </article>
 
-          <article class="panel bento-card bento-selfhosted" id="self-hosted">
-            <h2>Built for local networks, Tailscale, and your own HTTPS endpoints.</h2>
-            <p class="muted">OpenClient connects to the OpenCode server you configure. It works with both <code>https://</code> and user-acknowledged <code>http://</code> setups, so private lab boxes and polished public endpoints can live in the same app.</p>
-          </article>
-
-          <article class="panel bento-card bento-native">
-            <div class="mini-title">Stay in the loop</div>
-            <div class="mini-strong">Follow active sessions without babysitting your desk setup.</div>
-            <p class="muted">OpenClient keeps the important stuff close: recent servers, active chats, and the moments where an agent needs a decision from you.</p>
-          </article>
-
-          <article class="panel bento-card bento-recent">
-            <div class="mini-title">Fast reconnect</div>
-            <div class="mini-strong">Jump back into the right server without redoing setup every time.</div>
-            <p class="muted">Saved recent servers make it easy to move between a lab box, a tailnet machine, and a more polished public endpoint.</p>
-          </article>
-
-          <article class="panel bento-card bento-ipad">
-            <img class="device-shot landscape-shot" src="./images/ipad-chat.png" alt="OpenClient chat screen on iPad">
-            <div class="gallery-caption">
-              <strong>iPad-ready layout</strong>
-              Split navigation makes larger screens feel like a natural control room for active sessions.
+          <article class="snap-card">
+            <div class="snap-visual">
+              <img src="./images/permission.png" alt="OpenClient permission prompt on iPhone">
             </div>
+            <p><strong>Answer permission requests.</strong> Approve or deny the moments where an agent needs a decision, right where the session is happening.</p>
           </article>
 
-          <article class="panel bento-card bento-chat">
-            <img class="device-shot portrait-shot" src="./images/hero-chat.png" alt="OpenClient chat screen on iPhone">
-            <div class="gallery-caption">
-              <strong>Native chat flow</strong>
-              Messages, tool activity, and active work stay legible on a phone-sized screen.
+          <article class="snap-card">
+            <div class="snap-visual">
+              <img src="./images/question.png" alt="OpenClient question prompt on iPhone">
             </div>
+            <p><strong>Reply to questions.</strong> Multiple choice and custom prompts stay first-class instead of getting buried in raw chat text.</p>
+          </article>
+
+          <article class="snap-card">
+            <div class="snap-visual">
+              <img src="./images/live-activity.png" alt="OpenClient Live Activity on iPhone">
+            </div>
+            <p><strong>Track work from the Lock Screen.</strong> Live Activities keep an active session visible when you are between apps.</p>
+          </article>
+
+          <article class="snap-card">
+            <div class="snap-visual">
+              <img src="./images/recent-widget.png" alt="OpenClient recent sessions widget on iPhone">
+            </div>
+            <p><strong>See recent sessions at a glance.</strong> Widgets make it easy to jump back into the work that changed most recently.</p>
+          </article>
+
+          <article class="snap-card">
+            <div class="snap-visual">
+              <img src="./images/pinned-widget.png" alt="OpenClient pinned sessions widget on iPhone">
+            </div>
+            <p><strong>Pin the important threads.</strong> Keep the sessions you care about close on the Home Screen.</p>
           </article>
         </div>
       </section>
