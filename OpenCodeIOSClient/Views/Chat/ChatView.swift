@@ -461,6 +461,9 @@ struct ChatView: View {
                     }
                     .onChange(of: isReadingModeStreamActive) { _, isActive in
                         updateReadingModeBottomSpacerHeight(animated: !isActive)
+                        if !isActive {
+                            retireSendReadingModeAfterStream()
+                        }
                     }
                     .onPreferenceChange(ChatBottomAnchorFramePreferenceKey.self) { frame in
                         guard needsInitialBottomSnap, bottomAnchorFrame != frame else { return }
@@ -961,6 +964,14 @@ struct ChatView: View {
         }
     }
 
+    private func retireSendReadingModeAfterStream() {
+        guard isSendReadingModeActive, !isReadingModeStreamActive else { return }
+
+        isSendReadingModeActive = false
+        readingModeScrollRequest = nil
+        taskStore.autoScrollTask?.cancel()
+    }
+
     private var displayedMessages: ArraySlice<OpenCodeMessageEnvelope> {
         viewModel.messages.suffix(visibleMessageCount)
     }
@@ -1365,17 +1376,6 @@ struct ChatView: View {
             ToolbarItem(placement: .opencodeTrailing) {
                 ModelToolbarMenu(viewModel: viewModel, session: liveSession, glassNamespace: toolbarGlassNamespace)
             }
-
-            #if DEBUG
-            ToolbarItem(placement: .opencodeTrailing) {
-                Button {
-                    viewModel.presentDebugProbe()
-                } label: {
-                    Image(systemName: "stethoscope")
-                }
-                .accessibilityLabel("Debug Probe")
-            }
-            #endif
         }
     }
 
