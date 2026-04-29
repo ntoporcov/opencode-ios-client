@@ -29,6 +29,10 @@ schemes:
       config: Debug
       targets:
         - OpenCodeIOSClientUITests
+packages:
+  HighlighterSwift:
+    url: https://github.com/smittytone/HighlighterSwift
+    from: 3.0.3
 targets:
   OpenCodeIOSClient:
     type: application
@@ -51,6 +55,8 @@ targets:
     dependencies:
       - target: OpenCodeChatActivityExtension
         embed: true
+      - package: HighlighterSwift
+        product: Highlighter
     preBuildScripts:
       - name: Validate bundle identifier
         script: |
@@ -152,6 +158,9 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         SWIFT_EMIT_LOC_STRINGS: YES
+    dependencies:
+      - package: HighlighterSwift
+        product: Highlighter
     scheme:
       gatherCoverageData: false
       testTargets:

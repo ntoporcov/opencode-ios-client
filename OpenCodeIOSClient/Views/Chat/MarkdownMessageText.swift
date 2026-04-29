@@ -12,10 +12,11 @@ struct MarkdownMessageText: View {
         case blockQuote(id: Int, value: String)
         case listItem(id: Int, marker: ListMarker, value: String)
         case table(id: Int, headers: [String], rows: [[String]])
+        case codeBlock(id: Int, language: String?, value: String)
 
         var id: Int {
             switch self {
-            case let .text(id, _), let .heading(id, _, _), let .blockQuote(id, _), let .listItem(id, _, _), let .table(id, _, _):
+            case let .text(id, _), let .heading(id, _, _), let .blockQuote(id, _), let .listItem(id, _, _), let .table(id, _, _), let .codeBlock(id, _, _):
                 return id
             }
         }
@@ -56,6 +57,9 @@ struct MarkdownMessageText: View {
                     styledListItem(markdownText(value), marker: marker)
                 case let .table(_, headers, rows):
                     styledTable(headers: headers, rows: rows)
+                case let .codeBlock(_, language, value):
+                    HighlightedCodeBlock(code: value, language: language)
+                        .padding(.vertical, codeBlockOuterPadding)
                 }
             }
         }
@@ -194,6 +198,13 @@ struct MarkdownMessageText: View {
         while index < lines.count {
             let line = lines[index]
 
+            if let codeBlock = fencedCodeBlock(in: lines, startingAt: index) {
+                result.append(.codeBlock(id: id, language: codeBlock.language, value: codeBlock.value))
+                id += 1
+                index = codeBlock.nextIndex
+                continue
+            }
+
             if let table = markdownTable(in: lines, startingAt: index) {
                 result.append(.table(id: id, headers: table.headers, rows: table.rows))
                 id += 1
@@ -242,6 +253,49 @@ struct MarkdownMessageText: View {
         }
 
         return nil
+    }
+
+    private func fencedCodeBlock(in lines: [String], startingAt startIndex: Int) -> (language: String?, value: String, nextIndex: Int)? {
+        guard let fence = codeFence(from: lines[startIndex]) else { return nil }
+
+        var values: [String] = []
+        var index = startIndex + 1
+
+        while index < lines.count {
+            if isClosingCodeFence(lines[index], fence: fence.marker) {
+                return (fence.language, values.joined(separator: "\n"), index + 1)
+            }
+
+            values.append(lines[index])
+            index += 1
+        }
+
+        return (fence.language, values.joined(separator: "\n"), index)
+    }
+
+    private func codeFence(from line: String) -> (marker: String, language: String?)? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        let marker: String
+
+        if trimmed.hasPrefix("```") {
+            marker = "```"
+        } else if trimmed.hasPrefix("~~~") {
+            marker = "~~~"
+        } else {
+            return nil
+        }
+
+        let language = String(trimmed.dropFirst(marker.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .whitespaces)
+            .first
+
+        return (marker, language?.isEmpty == false ? language : nil)
+    }
+
+    private func isClosingCodeFence(_ line: String, fence: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix(fence)
     }
 
     private func listItem(from line: String) -> (marker: ListMarker, value: String)? {
@@ -583,6 +637,15 @@ struct MarkdownMessageText: View {
     }
 
     private var tableOuterPadding: CGFloat {
+        switch style {
+        case .standard:
+            return 5
+        case .reasoning:
+            return 4
+        }
+    }
+
+    private var codeBlockOuterPadding: CGFloat {
         switch style {
         case .standard:
             return 5
