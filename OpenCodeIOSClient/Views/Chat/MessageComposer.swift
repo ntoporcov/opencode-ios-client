@@ -8,13 +8,21 @@ import PhotosUI
 import UniformTypeIdentifiers
 #endif
 
+final class MessageComposerDraftStore: ObservableObject {
+    @Published var text: String
+
+    init(text: String = "") {
+        self.text = text
+    }
+}
+
 struct MessageComposer: View {
     private enum AccessoryDestination: Hashable {
         case fork
         case mcp
     }
 
-    @Binding var text: String
+    @ObservedObject var draftStore: MessageComposerDraftStore
     @Binding var isAccessoryMenuOpen: Bool
     let commands: [OpenCodeCommand]
     let attachmentCount: Int
@@ -28,6 +36,7 @@ struct MessageComposer: View {
     let mcpErrorMessage: String?
     let onInputFrameChange: (CGRect) -> Void
     let onFocusChange: (Bool) -> Void
+    let onTextChange: (String) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
     let onSelectCommand: (OpenCodeCommand) -> Void
@@ -48,6 +57,19 @@ struct MessageComposer: View {
     @State private var isShowingPhotosPicker = false
     @State private var isShowingFileImporter = false
 #endif
+
+    private var text: String {
+        draftStore.text
+    }
+
+    private var textBinding: Binding<String> {
+        Binding(
+            get: { draftStore.text },
+            set: { newValue in
+                setText(newValue)
+            }
+        )
+    }
 
     private var hasDraftContent: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || attachmentCount > 0
@@ -102,6 +124,14 @@ struct MessageComposer: View {
         slashQuery != nil && !isBusy
     }
 
+    private var expandedAccessorySheetDetentHeight: CGFloat {
+        #if canImport(PhotosUI)
+        recentPhotoAssets.isEmpty ? 475 : 575
+        #else
+        380
+        #endif
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if showsCommandPicker {
@@ -124,7 +154,7 @@ struct MessageComposer: View {
         .onAppear {
             syncSelectedCommand()
         }
-        .onChange(of: text) { _, _ in
+        .onChange(of: draftStore.text) { _, _ in
             syncSelectedCommand()
             if !text.isEmpty {
                 isAccessoryMenuOpen = false
@@ -174,7 +204,7 @@ struct MessageComposer: View {
     #if os(macOS)
     private var macComposer: some View {
         HStack(alignment: .bottom, spacing: 12) {
-            TextField("Message", text: $text, axis: .vertical)
+            TextField("Message", text: textBinding, axis: .vertical)
                 .textFieldStyle(.plain)
                 .font(.body)
                 .lineLimit(1 ... 8)
@@ -232,7 +262,7 @@ struct MessageComposer: View {
 
                 #if canImport(UIKit)
                 ComposerTextView(
-                    text: $text,
+                    text: textBinding,
                     placeholder: "Message",
                     maxLines: 6,
                     onFocusChange: onFocusChange
@@ -248,7 +278,7 @@ struct MessageComposer: View {
                     }
                     .accessibilityIdentifier("chat.input")
                 #else
-                TextField("Message", text: $text, axis: .vertical)
+                TextField("Message", text: textBinding, axis: .vertical)
                     .lineLimit(1 ... 6)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 11)
@@ -314,7 +344,7 @@ struct MessageComposer: View {
                         }
                     }
             }
-            .presentationDetents([.height(315), .height(460), .large], selection: $accessorySheetDetent)
+            .presentationDetents([.height(315), .height(expandedAccessorySheetDetentHeight), .large], selection: $accessorySheetDetent)
         }
     }
 
@@ -499,7 +529,7 @@ struct MessageComposer: View {
 
     private func expandAccessorySheetForNestedContentIfNeeded() {
         if accessorySheetDetent == .height(315) {
-            accessorySheetDetent = .height(460)
+            accessorySheetDetent = .height(expandedAccessorySheetDetentHeight)
         }
     }
 
@@ -519,8 +549,14 @@ struct MessageComposer: View {
 
     private func insertSlashCommand() {
         guard canInsertCommandShortcut else { return }
-        text = "/"
+        setText("/")
         isAccessoryMenuOpen = false
+    }
+
+    private func setText(_ newValue: String) {
+        guard draftStore.text != newValue else { return }
+        draftStore.text = newValue
+        onTextChange(newValue)
     }
 
 #if canImport(PhotosUI) && canImport(UIKit)

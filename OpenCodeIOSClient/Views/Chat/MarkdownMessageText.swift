@@ -55,7 +55,12 @@ struct MarkdownMessageText: View {
                         lineSpacing: textLineSpacing
                     )
                 } else {
-                    styledText(Text(verbatim: text))
+                    StreamingPlainText(
+                        text: text,
+                        font: textFont,
+                        foregroundColor: textForegroundStyle,
+                        lineSpacing: textLineSpacing
+                    )
                 }
             } else {
                 VStack(alignment: .leading, spacing: 0) {
@@ -81,13 +86,13 @@ struct MarkdownMessageText: View {
             }
         }
         .frame(maxWidth: isUser ? nil : .infinity, alignment: .leading)
-        .textSelection(.enabled)
+        .modifier(ConditionalTextSelectionModifier(isEnabled: !isStreaming))
     }
 
     private var shouldUseStreamingTextFade: Bool {
         guard animatesStreamingText, !isUser else { return false }
-        guard text.count <= 4_000 else { return false }
-        return text.filter(\.isNewline).count <= 120
+        guard text.count <= 1_800 else { return false }
+        return text.filter(\.isNewline).count <= 45
     }
 
     private func styledText(_ text: Text) -> some View {
@@ -676,6 +681,148 @@ struct MarkdownMessageText: View {
             return 4
         }
     }
+}
+
+private struct ConditionalTextSelectionModifier: ViewModifier {
+    let isEnabled: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content.textSelection(.enabled)
+        } else {
+            content.textSelection(.disabled)
+        }
+    }
+}
+
+private struct StreamingPlainText: View {
+    private struct Chunk: Identifiable {
+        let id: Int
+        let value: String
+    }
+
+    let text: String
+    let font: Font
+    let foregroundColor: Color
+    let lineSpacing: CGFloat
+
+    @State private var frozenChunks: [Chunk] = []
+    @State private var liveText = ""
+    @State private var lastText = ""
+    @State private var committedCharacterCount = 0
+    @State private var nextChunkID = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(frozenChunks) { chunk in
+                streamingText(chunk.value)
+            }
+
+            if !liveText.isEmpty {
+                streamingText(liveText)
+            }
+        }
+        .onAppear {
+            updateText(text)
+        }
+        .onChange(of: text) { _, newText in
+            updateText(newText)
+        }
+    }
+
+    private func streamingText(_ value: String) -> some View {
+        Text(verbatim: value)
+            .font(font)
+            .foregroundStyle(foregroundColor)
+            .lineSpacing(lineSpacing)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func updateText(_ newText: String) {
+        guard newText != lastText else { return }
+
+        guard newText.hasPrefix(lastText) else {
+            rebuild(from: newText)
+            return
+        }
+
+        lastText = newText
+        refreshLiveText(from: newText)
+    }
+
+    private func rebuild(from newText: String) {
+        frozenChunks = []
+        liveText = ""
+        lastText = newText
+        committedCharacterCount = 0
+        nextChunkID = 0
+        refreshLiveText(from: newText)
+    }
+
+    private func refreshLiveText(from fullText: String) {
+        let committedIndex = fullText.index(
+            fullText.startIndex,
+            offsetBy: committedCharacterCount,
+            limitedBy: fullText.endIndex
+        ) ?? fullText.endIndex
+        var tail = String(fullText[committedIndex...])
+
+        while let boundary = commitBoundary(in: tail) {
+            let frozen = String(tail[..<boundary])
+            appendFrozenChunk(frozen)
+            committedCharacterCount += frozen.count
+            tail = String(tail[boundary...])
+        }
+
+        liveText = tail
+    }
+
+    private func appendFrozenChunk(_ value: String) {
+        guard !value.isEmpty else { return }
+        frozenChunks.append(Chunk(id: nextChunkID, value: value))
+        nextChunkID += 1
+    }
+
+    private func commitBoundary(in text: String) -> String.Index? {
+        if let paragraphRange = text.range(of: "\n\n") {
+            return paragraphRange.upperBound
+        }
+
+        guard text.count > softChunkCharacterLimit else {
+            return nil
+        }
+
+        let preferredLimit = text.index(
+            text.startIndex,
+            offsetBy: softChunkCharacterLimit,
+            limitedBy: text.endIndex
+        ) ?? text.endIndex
+
+        if let newline = text[..<preferredLimit].lastIndex(of: "\n") {
+            return text.index(after: newline)
+        }
+
+        guard text.count > hardChunkCharacterLimit else {
+            return nil
+        }
+
+        let hardLimit = text.index(
+            text.startIndex,
+            offsetBy: hardChunkCharacterLimit,
+            limitedBy: text.endIndex
+        ) ?? text.endIndex
+
+        guard let newline = text[..<hardLimit].lastIndex(of: "\n") else {
+            return nil
+        }
+
+        return text.index(after: newline)
+    }
+
+    private var softChunkCharacterLimit: Int { 1_200 }
+    private var hardChunkCharacterLimit: Int { 2_400 }
 }
 
 private struct StreamingTextFade: View {

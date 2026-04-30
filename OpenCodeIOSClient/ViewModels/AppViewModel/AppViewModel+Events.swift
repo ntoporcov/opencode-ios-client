@@ -1,7 +1,17 @@
 import Foundation
 
 extension AppViewModel {
-    private static let streamDeltaCoalescingInterval: Duration = .milliseconds(50)
+    private static let shortStreamDeltaCoalescingInterval: Duration = .milliseconds(50)
+    private static let mediumStreamDeltaCoalescingInterval: Duration = .milliseconds(90)
+    private static let longStreamDeltaCoalescingInterval: Duration = .milliseconds(140)
+    private static let veryLongStreamDeltaCoalescingInterval: Duration = .milliseconds(220)
+
+    private struct TranscriptDeltaKey: Hashable {
+        let sessionID: String
+        let messageID: String
+        let partID: String
+        let field: String
+    }
 
     var isCapturingStreamingDiagnostics: Bool {
         isShowingDebugProbe || isRunningDebugProbe
@@ -143,6 +153,10 @@ extension AppViewModel {
             default:
                 break
             }
+            return
+        }
+
+        if shouldSkipInactiveLiveMessageEvent(managed) {
             return
         }
 
@@ -336,6 +350,7 @@ extension AppViewModel {
 
     private func shouldBufferTranscriptEvent(_ managed: OpenCodeManagedEvent) -> Bool {
         guard let selectedSessionID = selectedSession?.id else { return false }
+        guard activeChatSessionID == selectedSessionID else { return false }
 
         switch managed.typed {
         case let .messagePartDelta(sessionID, _, _, _, _):
@@ -363,10 +378,27 @@ extension AppViewModel {
         guard streamDeltaFlushTask == nil else { return }
 
         streamDeltaFlushTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: Self.streamDeltaCoalescingInterval)
+            let interval = self?.streamDeltaCoalescingInterval() ?? Self.shortStreamDeltaCoalescingInterval
+            try? await Task.sleep(for: interval)
             guard !Task.isCancelled else { return }
             self?.flushPendingTranscriptEvents(reason: "timer")
         }
+    }
+
+    private func streamDeltaCoalescingInterval() -> Duration {
+        let pendingCharacterCount = pendingTranscriptEvents.reduce(0) { $0 + $1.deltaCharacterCount }
+        let projectedLength = currentAssistantTextLength() + pendingCharacterCount
+
+        if projectedLength >= 12_000 {
+            return Self.veryLongStreamDeltaCoalescingInterval
+        }
+        if projectedLength >= 6_000 {
+            return Self.longStreamDeltaCoalescingInterval
+        }
+        if projectedLength >= 2_500 {
+            return Self.mediumStreamDeltaCoalescingInterval
+        }
+        return Self.shortStreamDeltaCoalescingInterval
     }
 
     private func flushPendingTranscriptEvents(reason: String) {
@@ -379,10 +411,11 @@ extension AppViewModel {
         let events = pendingTranscriptEvents
         pendingTranscriptEvents = []
 
+        let reducerEvents = coalescedTranscriptEvents(events)
         var nextDirectoryState = directoryState
         var appliedCount = 0
 
-        for event in events {
+        for event in reducerEvents {
             let result = OpenCodeStateReducer.applyDirectoryEvent(
                 event: event.typedEvent,
                 state: &nextDirectoryState
@@ -400,10 +433,63 @@ extension AppViewModel {
             refreshLiveActivityIfNeeded(for: sessionID)
         }
 
-        logStreamDeltaFlush(reason: reason, events: events, appliedCount: appliedCount, flushedAt: now)
+        logStreamDeltaFlush(reason: reason, events: events, appliedCount: appliedCount, coalescedCount: reducerEvents.count, flushedAt: now)
     }
 
-    private func logStreamDeltaFlush(reason: String, events: [OpenCodePendingTranscriptEvent], appliedCount: Int, flushedAt now: Date) {
+    private func coalescedTranscriptEvents(_ events: [OpenCodePendingTranscriptEvent]) -> [OpenCodePendingTranscriptEvent] {
+        var result: [OpenCodePendingTranscriptEvent] = []
+        var order: [TranscriptDeltaKey] = []
+        var accumulated: [TranscriptDeltaKey: (event: OpenCodePendingTranscriptEvent, delta: String, characterCount: Int, enqueuedAt: Date)] = [:]
+
+        func flushAccumulated() {
+            for key in order {
+                guard let item = accumulated[key] else { continue }
+                result.append(
+                    OpenCodePendingTranscriptEvent(
+                        typedEvent: .messagePartDelta(
+                            sessionID: key.sessionID,
+                            messageID: key.messageID,
+                            partID: key.partID,
+                            field: key.field,
+                            delta: item.delta
+                        ),
+                        eventType: item.event.eventType,
+                        sessionID: key.sessionID,
+                        messageID: key.messageID,
+                        partID: key.partID,
+                        deltaCharacterCount: item.characterCount,
+                        enqueuedAt: item.enqueuedAt
+                    )
+                )
+            }
+            order.removeAll(keepingCapacity: true)
+            accumulated.removeAll(keepingCapacity: true)
+        }
+
+        for event in events {
+            guard case let .messagePartDelta(sessionID, messageID, partID, field, delta) = event.typedEvent else {
+                flushAccumulated()
+                result.append(event)
+                continue
+            }
+
+            let key = TranscriptDeltaKey(sessionID: sessionID, messageID: messageID, partID: partID, field: field)
+            if var item = accumulated[key] {
+                item.delta += delta
+                item.characterCount += event.deltaCharacterCount
+                item.enqueuedAt = min(item.enqueuedAt, event.enqueuedAt)
+                accumulated[key] = item
+            } else {
+                order.append(key)
+                accumulated[key] = (event, delta, event.deltaCharacterCount, event.enqueuedAt)
+            }
+        }
+
+        flushAccumulated()
+        return result
+    }
+
+    private func logStreamDeltaFlush(reason: String, events: [OpenCodePendingTranscriptEvent], appliedCount: Int, coalescedCount: Int, flushedAt now: Date) {
         guard isCapturingStreamingDiagnostics else {
             streamDeltaLastFlushAt = now
             return
@@ -419,11 +505,52 @@ extension AppViewModel {
         streamDeltaLastFlushAt = now
 
         appendDebugLog(
-            "transcript flush reason=\(reason) count=\(events.count) applied=\(appliedCount) chars=\(chars) wait=\(waitMS)ms cadence=\(cadence) target=\(target) focused=\(isComposerStreamingFocused) types=\(types)"
+            "transcript flush reason=\(reason) count=\(events.count) coalesced=\(coalescedCount) applied=\(appliedCount) chars=\(chars) wait=\(waitMS)ms cadence=\(cadence) target=\(target) focused=\(isComposerStreamingFocused) types=\(types)"
+        )
+    }
+
+    nonisolated static func shouldProcessLiveMessageEvent(
+        eventType: String,
+        eventSessionID: String?,
+        activeChatSessionID: String?,
+        activeLiveActivitySessionIDs: Set<String>,
+        affectsSelectedTranscript: Bool
+    ) -> Bool {
+        guard isLiveActivityMessageEventType(eventType) else { return true }
+
+        if let eventSessionID, activeLiveActivitySessionIDs.contains(eventSessionID) {
+            return true
+        }
+
+        if let eventSessionID, eventSessionID == activeChatSessionID {
+            return true
+        }
+
+        // Some removal events only carry message ids. Keep those when they match the selected transcript.
+        if eventSessionID == nil, affectsSelectedTranscript {
+            return true
+        }
+
+        return false
+    }
+
+    private func shouldSkipInactiveLiveMessageEvent(_ managed: OpenCodeManagedEvent) -> Bool {
+        let eventSessionID = managedEventSessionID(for: managed)
+        let affectsSelectedTranscript = eventSessionID == nil ? eventAffectsActiveSession(managed) : false
+        return !Self.shouldProcessLiveMessageEvent(
+            eventType: managed.envelope.type,
+            eventSessionID: eventSessionID,
+            activeChatSessionID: activeChatSessionID,
+            activeLiveActivitySessionIDs: activeLiveActivitySessionIDs,
+            affectsSelectedTranscript: affectsSelectedTranscript
         )
     }
 
     private func isLiveActivityMessageEvent(_ type: String) -> Bool {
+        Self.isLiveActivityMessageEventType(type)
+    }
+
+    nonisolated private static func isLiveActivityMessageEventType(_ type: String) -> Bool {
         switch type {
         case "message.updated", "message.part.updated", "message.part.delta", "message.removed", "message.part.removed":
             return true

@@ -52,8 +52,7 @@ extension AppViewModel {
 
     func setDraftMessage(_ text: String, forSessionID sessionID: String) {
         guard selectedSession?.id == sessionID else { return }
-        draftMessage = text
-        persistCurrentMessageDraft(forSessionID: sessionID)
+        saveMessageDraft(text, forSessionID: sessionID)
     }
 
     func hasMessageDraft(for session: OpenCodeSession) -> Bool {
@@ -78,8 +77,21 @@ extension AppViewModel {
     func persistCurrentMessageDraft(forSessionID sessionID: String? = nil, removesEmpty: Bool = true) {
         guard let sessionID = sessionID ?? selectedSession?.id else { return }
 
+        saveMessageDraft(draftMessage, forSessionID: sessionID, removesEmpty: removesEmpty, updateActiveDraft: false)
+    }
+
+    func saveMessageDraft(
+        _ text: String,
+        forSessionID sessionID: String,
+        removesEmpty: Bool = true,
+        updateActiveDraft: Bool = true
+    ) {
+        if updateActiveDraft, selectedSession?.id == sessionID {
+            draftMessage = text
+        }
+
         let key = messageDraftStorageKey(forSessionID: sessionID)
-        let draft = OpenCodeMessageDraft(text: draftMessage)
+        let draft = OpenCodeMessageDraft(text: text)
         if draft.isEmpty {
             guard removesEmpty else { return }
             messageDraftsByChatKey.removeValue(forKey: key)

@@ -314,6 +314,7 @@ extension AppViewModel {
                 draftMessage = draftCommand
                 addDraftAttachments(attachments)
                 persistCurrentMessageDraft(forSessionID: selectedSession.id)
+                composerResetToken = UUID()
             }
             directoryState.sessionStatuses[selectedSession.id] = previousStatus
             appendDebugLog("command error: \(error.localizedDescription)")
@@ -515,6 +516,7 @@ extension AppViewModel {
                 draftMessage = trimmed
                 addDraftAttachments(attachments)
                 persistCurrentMessageDraft(forSessionID: selectedSession.id)
+                composerResetToken = UUID()
             }
             directoryState.sessionStatuses[selectedSession.id] = previousStatus
             appendDebugLog("send error: \(error.localizedDescription)")
@@ -645,6 +647,7 @@ extension AppViewModel {
                 refundReservedUserPromptIfNeeded()
                 draftMessage = "/compact"
                 persistCurrentMessageDraft(forSessionID: selectedSession.id)
+                composerResetToken = UUID()
             }
             directoryState.sessionStatuses[selectedSession.id] = previousStatus
             appendDebugLog("compact error: \(error.localizedDescription)")

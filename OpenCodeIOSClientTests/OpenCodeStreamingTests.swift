@@ -320,6 +320,42 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(messages[0].parts.first?.text, "Hello world")
     }
 
+    func testLiveMessageEventGateDropsInactiveTranscriptEvents() {
+        XCTAssertFalse(AppViewModel.shouldProcessLiveMessageEvent(
+            eventType: "message.part.delta",
+            eventSessionID: "ses_background",
+            activeChatSessionID: "ses_current",
+            activeLiveActivitySessionIDs: [],
+            affectsSelectedTranscript: false
+        ))
+
+        XCTAssertTrue(AppViewModel.shouldProcessLiveMessageEvent(
+            eventType: "message.part.delta",
+            eventSessionID: "ses_current",
+            activeChatSessionID: "ses_current",
+            activeLiveActivitySessionIDs: [],
+            affectsSelectedTranscript: false
+        ))
+    }
+
+    func testLiveMessageEventGateKeepsLiveActivitiesAndStatusEvents() {
+        XCTAssertTrue(AppViewModel.shouldProcessLiveMessageEvent(
+            eventType: "message.part.delta",
+            eventSessionID: "ses_background",
+            activeChatSessionID: "ses_current",
+            activeLiveActivitySessionIDs: ["ses_background"],
+            affectsSelectedTranscript: false
+        ))
+
+        XCTAssertTrue(AppViewModel.shouldProcessLiveMessageEvent(
+            eventType: "session.status",
+            eventSessionID: "ses_background",
+            activeChatSessionID: "ses_current",
+            activeLiveActivitySessionIDs: [],
+            affectsSelectedTranscript: false
+        ))
+    }
+
     func testPartRemovedForMissingMessageDoesNotMutateSelectedChat() {
         let selected = OpenCodeSession(id: "ses_test", title: "Test", workspaceID: nil, directory: nil, projectID: nil, parentID: nil)
         var state = OpenCodeDirectoryState(
@@ -343,7 +379,248 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(state.messages.first?.parts.count, 1)
     }
 
+    func testLargeMessageChunkerSplitsCapturedPerformanceSessionShape() throws {
+        let text = Self.capturedPerformanceSessionText
+        let message = Self.performanceSessionMessage(text: text)
+
+        let textPart = try XCTUnwrap(OpenCodeLargeMessageChunker.chunkTextPart(in: message))
+        let chunks = try XCTUnwrap(OpenCodeLargeMessageChunker.chunks(for: message))
+
+        XCTAssertEqual(message.info.id, "msg_dde1491d8001Kl4SJDttx88s3j")
+        XCTAssertEqual(message.parts.map(\.type), ["step-start", "reasoning", "text", "step-finish"])
+        XCTAssertEqual(textPart.id, "prt_dde14a290001Hg6qh7Mm21YINd")
+        XCTAssertGreaterThan(text.count, OpenCodeLargeMessageChunker.minimumCharacterCount)
+        XCTAssertGreaterThan(chunks.count, 1)
+        XCTAssertEqual(chunks.first?.text.hasPrefix("## 1. Why AI Chat UI Performance Is Different"), true)
+        XCTAssertEqual(chunks.map(\.text).joined(), OpenCodeLargeMessageChunker.normalizedText(text))
+        XCTAssertTrue(chunks.dropLast().allSatisfy { !$0.isTail })
+        XCTAssertEqual(chunks.last?.isTail, true)
+    }
+
+    func testLargeMessageChunkerAllowsCompletedSessionOutputWithoutStreamingState() throws {
+        let message = Self.performanceSessionMessage(text: Self.capturedPerformanceSessionText)
+
+        let chunks = try XCTUnwrap(OpenCodeLargeMessageChunker.chunks(for: message))
+
+        XCTAssertGreaterThan(chunks.count, 1)
+    }
+
+    func testLargeMessageChunkerRejectsRenderableNonTextParts() {
+        var message = Self.performanceSessionMessage(text: Self.capturedPerformanceSessionText)
+        message.parts[1] = Self.part(id: "prt_reasoning", messageID: message.id, type: "reasoning", text: "Visible reasoning")
+
+        XCTAssertNil(OpenCodeLargeMessageChunker.chunks(for: message))
+    }
+
+    func testLargeMessageChunkerRejectsToolMessages() {
+        var message = Self.performanceSessionMessage(text: Self.capturedPerformanceSessionText)
+        message.parts.insert(Self.part(id: "prt_tool", messageID: message.id, type: "tool", text: nil), at: 2)
+
+        XCTAssertNil(OpenCodeLargeMessageChunker.chunks(for: message))
+    }
+
+    func testLargeMessageChunkerSplitsMarkdownListsAtItemBoundaries() throws {
+        let recommendations = (1...40)
+            .map { "\($0). Recommendation \($0) keeps list semantics inside a markdown-safe chunk row." }
+            .joined(separator: "\n")
+        let text = """
+Intro paragraph before the list so the message is chunkable.
+
+\(recommendations)
+
+Closing paragraph after the list.
+"""
+
+        let chunks = OpenCodeLargeMessageChunker.makeChunks(from: text)
+        let listChunks = chunks.filter { $0.text.contains("1. Recommendation") || $0.text.contains("40. Recommendation") }
+
+        XCTAssertGreaterThan(listChunks.count, 1)
+        XCTAssertTrue(listChunks[0].text.contains("1. Recommendation 1"))
+        XCTAssertTrue(listChunks[listChunks.count - 1].text.contains("40. Recommendation 40"))
+        XCTAssertTrue(listChunks.allSatisfy { chunk in
+            chunk.text
+                .split(separator: "\n")
+                .allSatisfy { OpenCodeLargeMessageChunker.isMarkdownListLine(String($0)) }
+        })
+    }
+
+    func testLargeMessageChunkerKeepsCodeAndQuotesInOwnChunks() throws {
+        let quote = (1...12)
+            .map { "> Quote line \($0) stays with the surrounding quote block." }
+            .joined(separator: "\n")
+        let code = """
+```swift
+func render(_ value: String) {
+    print(value)
+}
+```
+"""
+        let text = """
+Intro paragraph before structured markdown.
+
+\(quote)
+
+\(code)
+
+Closing paragraph after structured markdown.
+"""
+
+        let chunks = OpenCodeLargeMessageChunker.makeChunks(from: text)
+        let quoteChunks = chunks.filter { $0.text.contains("> Quote line") }
+        let codeChunks = chunks.filter { $0.text.contains("```swift") }
+
+        XCTAssertEqual(quoteChunks.count, 1)
+        XCTAssertTrue(quoteChunks[0].text.contains("> Quote line 1"))
+        XCTAssertTrue(quoteChunks[0].text.contains("> Quote line 12"))
+        XCTAssertEqual(codeChunks.count, 1)
+        XCTAssertTrue(codeChunks[0].text.contains("func render"))
+        XCTAssertEqual(chunks.map(\.text).joined(), OpenCodeLargeMessageChunker.normalizedText(text))
+    }
+
+    func testLargeMessageChunkCachePreservesFrozenChunksOnAppend() throws {
+        let cache = OpenCodeLargeMessageChunkCache()
+        let initialText = Self.capturedPerformanceSessionText
+        let appendedText = initialText + """
+
+
+## 3. Cached Tail Work
+
+This appended section simulates more streamed text arriving after some chunks have already become stable. The existing frozen rows should keep their ids and text while the cache only recomputes the mutable tail segment.
+"""
+        let initialMessage = Self.performanceSessionMessage(text: initialText)
+        let appendedMessage = Self.performanceSessionMessage(text: appendedText)
+
+        let initialChunks = try XCTUnwrap(cache.chunks(for: initialMessage))
+        let appendedChunks = try XCTUnwrap(cache.chunks(for: appendedMessage))
+        let statelessChunks = try XCTUnwrap(OpenCodeLargeMessageChunker.chunks(for: appendedMessage))
+
+        XCTAssertGreaterThan(initialChunks.count, 1)
+        XCTAssertEqual(appendedChunks, statelessChunks)
+        XCTAssertEqual(Array(appendedChunks.prefix(initialChunks.count - 1)), Array(initialChunks.dropLast()))
+        XCTAssertEqual(appendedChunks.map(\.text).joined(), OpenCodeLargeMessageChunker.normalizedText(appendedText))
+    }
+
+    func testLargeMessageChunkCacheFallsBackWhenTextIsRewritten() throws {
+        let cache = OpenCodeLargeMessageChunkCache()
+        let initialMessage = Self.performanceSessionMessage(text: Self.capturedPerformanceSessionText)
+        let rewrittenText = Self.capturedPerformanceSessionText.replacingOccurrences(
+            of: "Performance engineering",
+            with: "Rendering performance",
+            options: [],
+            range: Self.capturedPerformanceSessionText.startIndex..<Self.capturedPerformanceSessionText.endIndex
+        )
+        let rewrittenMessage = Self.performanceSessionMessage(text: rewrittenText)
+
+        _ = try XCTUnwrap(cache.chunks(for: initialMessage))
+        let rewrittenChunks = try XCTUnwrap(cache.chunks(for: rewrittenMessage))
+
+        XCTAssertEqual(rewrittenChunks, OpenCodeLargeMessageChunker.chunks(for: rewrittenMessage))
+        XCTAssertEqual(rewrittenChunks.map(\.text).joined(), OpenCodeLargeMessageChunker.normalizedText(rewrittenText))
+    }
+
+    func testLargeMessageChunkCacheKeepsCompletedMessagesChunked() throws {
+        let cache = OpenCodeLargeMessageChunkCache()
+        let message = Self.performanceSessionMessage(text: Self.capturedPerformanceSessionText)
+
+        let chunks = try XCTUnwrap(cache.chunks(for: message, isStreaming: false))
+
+        XCTAssertGreaterThan(chunks.count, 1)
+        XCTAssertEqual(chunks.map(\.text).joined(), OpenCodeLargeMessageChunker.normalizedText(Self.capturedPerformanceSessionText))
+    }
+
+    func testLargeMessageChunkCacheFreezesPrefixMidStream() throws {
+        let cache = OpenCodeLargeMessageChunkCache()
+        let paragraph = String(repeating: "This completed paragraph should become a frozen markdown row once the next block starts. ", count: 10)
+        let initialText = """
+## Stable Heading
+
+\(paragraph)
+
+1. First streamed item has enough text to be useful but should remain inside its list item.
+"""
+        let appendedItems = (2...30)
+            .map { "\($0). Streamed item \($0) can be grouped with nearby complete list items." }
+            .joined(separator: "\n")
+        let appendedText = initialText + "\n" + appendedItems
+        let initialMessage = Self.performanceSessionMessage(text: initialText)
+        let appendedMessage = Self.performanceSessionMessage(text: appendedText)
+
+        let initialChunks = try XCTUnwrap(cache.chunks(for: initialMessage))
+        let frozenPrefix = Array(initialChunks.dropLast())
+        let appendedChunks = try XCTUnwrap(cache.chunks(for: appendedMessage))
+
+        XCTAssertGreaterThan(frozenPrefix.count, 0)
+        XCTAssertEqual(Array(appendedChunks.prefix(frozenPrefix.count)), frozenPrefix)
+        XCTAssertGreaterThan(appendedChunks.count, initialChunks.count)
+        XCTAssertEqual(appendedChunks.map(\.text).joined(), OpenCodeLargeMessageChunker.normalizedText(appendedText))
+    }
+
     private func decodeEvent(_ json: String) throws -> OpenCodeEventEnvelope {
         try JSONDecoder().decode(OpenCodeEventEnvelope.self, from: Data(json.utf8))
     }
+
+    private static func performanceSessionMessage(text: String) -> OpenCodeMessageEnvelope {
+        let messageID = "msg_dde1491d8001Kl4SJDttx88s3j"
+        let sessionID = "ses_221eb7f4cffepRCHpKa51GEnbY"
+
+        return OpenCodeMessageEnvelope(
+            info: OpenCodeMessage(id: messageID, role: "assistant", sessionID: sessionID, time: nil, agent: nil, model: nil),
+            parts: [
+                part(id: "prt_step_start", messageID: messageID, sessionID: sessionID, type: "step-start", text: nil),
+                part(id: "prt_reasoning", messageID: messageID, sessionID: sessionID, type: "reasoning", text: ""),
+                part(id: "prt_dde14a290001Hg6qh7Mm21YINd", messageID: messageID, sessionID: sessionID, type: "text", text: text),
+                part(id: "prt_step_finish", messageID: messageID, sessionID: sessionID, type: "step-finish", text: nil)
+            ]
+        )
+    }
+
+    private static func part(
+        id: String,
+        messageID: String,
+        sessionID: String = "ses_221eb7f4cffepRCHpKa51GEnbY",
+        type: String,
+        text: String?
+    ) -> OpenCodePart {
+        OpenCodePart(
+            id: id,
+            messageID: messageID,
+            sessionID: sessionID,
+            type: type,
+            mime: nil,
+            filename: nil,
+            url: nil,
+            reason: nil,
+            tool: nil,
+            callID: nil,
+            state: nil,
+            text: text
+        )
+    }
+
+    private static let capturedPerformanceSessionText = """
+## 1. Why AI Chat UI Performance Is Different
+
+Performance engineering for AI chat interfaces is not the same as performance engineering for a typical CRUD app, document editor, or social feed. A chat UI is deceptively simple: messages go in, messages come out, the user scrolls. But AI chat adds a difficult combination of workload patterns: long-lived streaming responses, rapidly mutating text, syntax-highlighted code blocks, markdown rendering, attachments, tool events, citations, retries, partial failures, and conversation histories that can grow without a natural upper bound.
+
+The hardest part is that the UI is expected to feel alive while doing a large amount of incremental work. Every token, sentence, paragraph, table row, or code block can cause layout invalidation. If the renderer naively reparses the entire assistant message on every chunk, it can create a death spiral: more text means more parsing, more parsing means slower frames, slower frames delay updates, delayed updates accumulate, and accumulated updates cause even larger rendering bursts.
+
+Mobile makes this worse. The CPU is slower, thermal limits matter, memory pressure is real, and the input system is more sensitive to dropped frames. A desktop web chat can sometimes get away with inefficient markdown rendering or oversized DOM trees. A mobile chat feed usually cannot. The feed must preserve scrolling fluidity while handling unbounded content and maintaining a responsive composer, keyboard, attachment picker, and navigation shell.
+
+| Concern | Traditional Chat | AI Chat UI |
+|---|---:|---:|
+| Message size | Usually small | Often very large |
+| Update frequency | Per message | Per token or chunk |
+| Rendering cost | Mostly static text | Markdown, code, tables |
+| Scroll behavior | Predictable | Streaming changes height |
+| Failure modes | Send failed | Stream interrupted, retry, partial tool state |
+| Memory growth | Moderate | Potentially unbounded |
+
+## 2. The Streaming Rendering Pipeline
+
+A robust AI chat UI should treat streaming as a pipeline, not as a series of immediate UI mutations. The network layer receives bytes or events. The protocol layer converts those into structured chunks. The aggregation layer appends them into a message model. The rendering layer decides when and how much of that model to present. The layout layer measures and displays it. The scroll controller decides whether the viewport should follow the newest content.
+
+The common mistake is to couple all of these layers together. For example, a WebSocket event arrives, appends a token to a string, reparses markdown, updates React or SwiftUI state, invalidates the list, measures every row, and scrolls to bottom. That might work for a short response, but it will break under stress when the assistant produces long tables, large code blocks, or thousands of tokens.
+
+A better model is to buffer aggressively and render intentionally. Incoming stream chunks should be cheap to receive. The UI should commit updates at a controlled cadence, often aligned with animation frames or a small interval such as 30 to 100 milliseconds. This reduces layout churn while preserving the perception of streaming. Humans do not need every token rendered instantly; they need progress to feel continuous and the interface to remain responsive.
+"""
 }
