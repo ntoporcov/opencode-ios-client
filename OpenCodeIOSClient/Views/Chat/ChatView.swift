@@ -103,6 +103,8 @@ private struct MessageComposerSnapshot: Equatable {
     let attachmentCount: Int
     let isBusy: Bool
     let canFork: Bool
+    let forkSignature: String
+    let mcpSignature: String
     let actionSignature: String
 }
 
@@ -114,6 +116,12 @@ private struct EquatableMessageComposerHost: View, Equatable {
     let attachmentCount: Int
     let isBusy: Bool
     let canFork: Bool
+    let forkableMessages: [OpenCodeForkableMessage]
+    let mcpServers: [OpenCodeMCPServer]
+    let connectedMCPServerCount: Int
+    let isLoadingMCP: Bool
+    let togglingMCPServerNames: Set<String>
+    let mcpErrorMessage: String?
     let actionSignature: String
     let onInputFrameChange: (CGRect) -> Void
     let onFocusChange: (Bool) -> Void
@@ -121,7 +129,9 @@ private struct EquatableMessageComposerHost: View, Equatable {
     let onStop: () -> Void
     let onSelectCommand: (OpenCodeCommand) -> Void
     let onCompact: () -> Void
-    let onOpenFork: () -> Void
+    let onForkMessage: (String) -> Void
+    let onLoadMCP: () -> Void
+    let onToggleMCP: (String) -> Void
     let onAddAttachments: ([OpenCodeComposerAttachment]) -> Void
 
     nonisolated static func == (lhs: EquatableMessageComposerHost, rhs: EquatableMessageComposerHost) -> Bool {
@@ -136,13 +146,21 @@ private struct EquatableMessageComposerHost: View, Equatable {
             attachmentCount: attachmentCount,
             isBusy: isBusy,
             canFork: canFork,
+            forkableMessages: forkableMessages,
+            mcpServers: mcpServers,
+            connectedMCPServerCount: connectedMCPServerCount,
+            isLoadingMCP: isLoadingMCP,
+            togglingMCPServerNames: togglingMCPServerNames,
+            mcpErrorMessage: mcpErrorMessage,
             onInputFrameChange: onInputFrameChange,
             onFocusChange: onFocusChange,
             onSend: onSend,
             onStop: onStop,
             onSelectCommand: onSelectCommand,
             onCompact: onCompact,
-            onOpenFork: onOpenFork,
+            onForkMessage: onForkMessage,
+            onLoadMCP: onLoadMCP,
+            onToggleMCP: onToggleMCP,
             onAddAttachments: onAddAttachments
         )
     }
@@ -605,30 +623,15 @@ struct ChatView: View {
             .presentationDetents([.medium, .large])
         }
         .overlay {
-            if composerAccessoryExpansion.isExpanded || isComposerMenuOpen {
+            if composerAccessoryExpansion.isExpanded {
                 GeometryReader { geometry in
-                    let protectedWidth: CGFloat = isComposerMenuOpen ? 276 : 0
-                    let protectedHeight: CGFloat = isComposerMenuOpen ? 314 : 0
-
                     VStack(spacing: 0) {
                         Color.black.opacity(0.001)
-                            .frame(height: max(0, geometry.size.height - protectedHeight))
+                            .frame(height: geometry.size.height)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 dismissComposerOverlays()
                             }
-
-                        HStack(spacing: 0) {
-                            Color.clear
-                                .frame(width: protectedWidth)
-
-                            Color.black.opacity(0.001)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    dismissComposerOverlays()
-                                }
-                        }
-                        .frame(height: protectedHeight)
                     }
                     .ignoresSafeArea()
                 }
@@ -723,6 +726,14 @@ struct ChatView: View {
     private func activeMessageComposer(isBusy: Bool) -> some View {
         let canFork = !viewModel.forkableMessages.isEmpty
         let commands = viewModel.commands(canFork: canFork)
+        let forkableMessages = viewModel.forkableMessages
+        let forkSignature = forkableMessages
+            .map { "\($0.id):\($0.text):\($0.created ?? 0)" }
+            .joined(separator: "|")
+        let mcpServers = viewModel.mcpServers
+        let mcpSignature = mcpServers
+            .map { "\($0.name):\($0.status.status):\($0.status.error ?? "")" }
+            .joined(separator: "|") + "|loading=\(viewModel.directoryState.isLoadingMCP)|toggling=\(viewModel.directoryState.togglingMCPServerNames.sorted().joined(separator: ","))|error=\(viewModel.directoryState.mcpErrorMessage ?? "")"
         let snapshot = MessageComposerSnapshot(
             textValue: viewModel.draftMessage,
             isAccessoryMenuOpenValue: isComposerMenuOpen,
@@ -730,6 +741,8 @@ struct ChatView: View {
             attachmentCount: viewModel.draftAttachments.count,
             isBusy: isBusy,
             canFork: canFork,
+            forkSignature: forkSignature,
+            mcpSignature: mcpSignature,
             actionSignature: composerActionSignature
         )
 
@@ -741,6 +754,12 @@ struct ChatView: View {
             attachmentCount: snapshot.attachmentCount,
             isBusy: isBusy,
             canFork: canFork,
+            forkableMessages: forkableMessages,
+            mcpServers: mcpServers,
+            connectedMCPServerCount: viewModel.connectedMCPServerCount,
+            isLoadingMCP: viewModel.directoryState.isLoadingMCP,
+            togglingMCPServerNames: viewModel.directoryState.togglingMCPServerNames,
+            mcpErrorMessage: viewModel.directoryState.mcpErrorMessage,
             actionSignature: snapshot.actionSignature,
             onInputFrameChange: { _ in },
             onFocusChange: { isFocused in
@@ -777,8 +796,14 @@ struct ChatView: View {
                 shouldSnapOnNextMessage = true
                 Task { await viewModel.compactSession(sessionID: sessionID, userVisible: true, meterPrompt: false) }
             },
-            onOpenFork: {
-                viewModel.presentForkSessionSheet()
+            onForkMessage: { messageID in
+                Task { await viewModel.forkSelectedSession(from: messageID) }
+            },
+            onLoadMCP: {
+                Task { await viewModel.loadMCPStatusIfNeeded() }
+            },
+            onToggleMCP: { name in
+                Task { await viewModel.toggleMCPServer(name: name) }
             },
             onAddAttachments: { attachments in
                 viewModel.addDraftAttachments(attachments)
@@ -787,7 +812,7 @@ struct ChatView: View {
 
         composer
             .equatable()
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(.clear)
     }
