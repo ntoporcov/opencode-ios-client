@@ -799,6 +799,7 @@ private struct LargeMessageChunkRow: View, Equatable {
     let text: String
     let allowsTextSelection: Bool
     let isStreamingTail: Bool
+    let animatesStreamingText: Bool
 
     var body: some View {
         if allowsTextSelection {
@@ -815,7 +816,7 @@ private struct LargeMessageChunkRow: View, Equatable {
                 isUser: false,
                 style: .standard,
                 isStreaming: isStreamingTail,
-                animatesStreamingText: false
+                animatesStreamingText: animatesStreamingText
             )
 
             Spacer(minLength: 0)
@@ -2290,7 +2291,8 @@ struct ChatView: View {
         return LargeMessageChunkRow(
             text: item.chunk.text,
             allowsTextSelection: !isStreaming,
-            isStreamingTail: isStreaming && item.chunk.isTail
+            isStreamingTail: isStreaming && item.chunk.isTail,
+            animatesStreamingText: shouldAnimateStreamingText
         )
             .equatable()
             .contextMenu {
