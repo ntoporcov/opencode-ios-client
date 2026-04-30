@@ -700,6 +700,12 @@ private enum ChatDisplayItem: Identifiable {
     }
 }
 
+private enum ChatScrollTarget {
+    static let olderMessagesButton = "chat-older-messages-button"
+    static let thinkingRow = "chat-thinking-row"
+    static let bottomAnchor = "chat-bottom-anchor"
+}
+
 private struct PendingOutgoingSend {
     let text: String
     let attachments: [OpenCodeComposerAttachment]
@@ -1271,6 +1277,7 @@ struct ChatView: View {
                                     .background(OpenCodePlatformColor.secondaryGroupedBackground, in: Capsule())
                             }
                             .buttonStyle(.plain)
+                            .id(ChatScrollTarget.olderMessagesButton)
                             .padding(.bottom, 4)
                             .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 0, trailing: 16))
                             .listRowSeparator(.hidden)
@@ -1436,6 +1443,7 @@ struct ChatView: View {
             taskStore.autoScrollTask?.cancel()
             taskStore.streamingAutoScrollTask?.cancel()
             taskStore.composerDraftPersistenceTask?.cancel()
+            affordanceScrollTask?.cancel()
             contentRevealTask?.cancel()
             loadingIndicatorTask?.cancel()
             pendingOutgoingSendTask?.cancel()
@@ -1778,7 +1786,7 @@ struct ChatView: View {
                         .preference(key: ChatBottomAnchorFramePreferenceKey.self, value: anchorGeometry.frame(in: .named("chat-view-space")))
                 }
             }
-            .id("chat-bottom-anchor")
+            .id(ChatScrollTarget.bottomAnchor)
             .listRowInsets(EdgeInsets())
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
@@ -1834,7 +1842,7 @@ struct ChatView: View {
         taskStore.autoScrollTask?.cancel()
         taskStore.autoScrollTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(delayMS))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, canPerformScheduledChatScroll else { return }
             scrollToBottom(with: proxy, animated: animated)
         }
     }
@@ -1850,7 +1858,7 @@ struct ChatView: View {
             if delayMS > 0 {
                 try? await Task.sleep(for: .milliseconds(delayMS))
             }
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, canPerformScheduledChatScroll else { return }
             guard hasLoadedInitialWindow, shouldAutoFollowBottom, !isComposerInputFocused, !isSendReadingModeActive else { return }
 
             taskStore.lastStreamingAutoScrollAt = Date()
@@ -1858,14 +1866,15 @@ struct ChatView: View {
         }
     }
 
+    private var canPerformScheduledChatScroll: Bool {
+        viewModel.activeChatSessionID == sessionID && bottomAnchorFrame != .zero
+    }
+
     private func scrollToBottom(with proxy: ScrollViewProxy, animated: Bool) {
+        guard canPerformScheduledChatScroll else { return }
         shouldFollowStreamingUpdates = true
-        if animated {
-            withAnimation(.easeOut(duration: 0.24)) {
-                proxy.scrollTo("chat-bottom-anchor", anchor: .bottom)
-            }
-        } else {
-            proxy.scrollTo("chat-bottom-anchor", anchor: .bottom)
+        withoutListScrollAnimation {
+            proxy.scrollTo(ChatScrollTarget.bottomAnchor, anchor: .bottom)
         }
     }
 
@@ -1874,31 +1883,39 @@ struct ChatView: View {
         taskStore.autoScrollTask = Task { @MainActor in
             await Task.yield()
             try? await Task.sleep(for: .milliseconds(30))
-            guard !Task.isCancelled, isSendReadingModeActive else { return }
+            guard !Task.isCancelled, isSendReadingModeActive, canPerformScheduledChatScroll else { return }
             scrollToMessage(messageID, with: proxy, anchor: .top, animated: true)
 
             try? await Task.sleep(for: .milliseconds(240))
-            guard !Task.isCancelled, isSendReadingModeActive else { return }
+            guard !Task.isCancelled, isSendReadingModeActive, canPerformScheduledChatScroll else { return }
             scrollToMessage(messageID, with: proxy, anchor: .top, animated: true)
         }
     }
 
     private func scrollToMessage(_ messageID: String, with proxy: ScrollViewProxy, anchor: UnitPoint, animated: Bool) {
-        if animated {
-            withAnimation(.easeInOut(duration: 0.30)) {
-                proxy.scrollTo(messageID, anchor: anchor)
-            }
-        } else {
+        guard displayedChatItems.contains(where: { $0.id == messageID }) else {
+            scrollToBottom(with: proxy, animated: false)
+            return
+        }
+
+        withoutListScrollAnimation {
             proxy.scrollTo(messageID, anchor: anchor)
         }
+    }
+
+    private func withoutListScrollAnimation(_ operation: () -> Void) {
+        var transaction = Transaction()
+        transaction.animation = nil
+        withTransaction(transaction, operation)
     }
 
     private func scheduleComposerAffordanceFollow(with proxy: ScrollViewProxy, delayMS: Int) {
         affordanceScrollTask?.cancel()
         affordanceScrollTask = Task { @MainActor in
+            guard canPerformScheduledChatScroll else { return }
             scheduleScrollToBottom(with: proxy, delayMS: delayMS)
             try? await Task.sleep(for: .milliseconds(140))
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, canPerformScheduledChatScroll else { return }
             scheduleScrollToBottom(with: proxy, delayMS: 0)
         }
     }
@@ -2037,6 +2054,7 @@ struct ChatView: View {
     private var thinkingRowListItem: some View {
         ThinkingRow(animateEntry: isSendReadingModeActive)
             .transition(.identity)
+            .id(ChatScrollTarget.thinkingRow)
             .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 12, trailing: 16))
             .listRowSeparator(.hidden)
             .listRowBackground(Color.clear)
