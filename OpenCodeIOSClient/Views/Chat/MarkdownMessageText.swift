@@ -90,9 +90,7 @@ struct MarkdownMessageText: View {
     }
 
     private var shouldUseStreamingTextFade: Bool {
-        guard animatesStreamingText, !isUser else { return false }
-        guard text.count <= 1_800 else { return false }
-        return text.filter(\.isNewline).count <= 45
+        animatesStreamingText && !isUser
     }
 
     private func styledText(_ text: Text) -> some View {
