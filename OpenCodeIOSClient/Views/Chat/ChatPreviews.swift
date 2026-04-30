@@ -45,11 +45,11 @@ private struct QuestionPanelPreviewHost: View {
 }
 
 private struct MessageComposerPreviewHost: View {
-    @State private var text = "Can you tighten the vertical rhythm in this screen?"
+    @State private var draftStore = MessageComposerDraftStore(text: "Can you tighten the vertical rhythm in this screen?")
     @State private var isAccessoryMenuOpen = false
 
     var body: some View {
-        MessageComposer(text: $text, isAccessoryMenuOpen: $isAccessoryMenuOpen, commands: OpenCodePreviewData.commands, attachmentCount: OpenCodePreviewData.composerAttachments.count, isBusy: false, canFork: true, forkableMessages: [], mcpServers: [], connectedMCPServerCount: 0, isLoadingMCP: false, togglingMCPServerNames: [], mcpErrorMessage: nil, onInputFrameChange: { _ in }, onFocusChange: { _ in }, onSend: {}, onStop: {}, onSelectCommand: { _ in }, onCompact: {}, onForkMessage: { _ in }, onLoadMCP: {}, onToggleMCP: { _ in }, onAddAttachments: { _ in })
+        MessageComposer(draftStore: draftStore, isAccessoryMenuOpen: $isAccessoryMenuOpen, commands: OpenCodePreviewData.commands, attachmentCount: OpenCodePreviewData.composerAttachments.count, isBusy: false, canFork: true, forkableMessages: [], mcpServers: [], connectedMCPServerCount: 0, isLoadingMCP: false, togglingMCPServerNames: [], mcpErrorMessage: nil, onInputFrameChange: { _ in }, onFocusChange: { _ in }, onTextChange: { _ in }, onSend: {}, onStop: {}, onSelectCommand: { _ in }, onCompact: {}, onForkMessage: { _ in }, onLoadMCP: {}, onToggleMCP: { _ in }, onAddAttachments: { _ in })
             .padding()
             .background(OpenCodePlatformColor.groupedBackground)
     }

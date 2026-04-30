@@ -23,6 +23,597 @@ private extension OpenCodeMessageEnvelope {
     }
 }
 
+struct OpenCodeLargeMessageChunk: Identifiable, Equatable {
+    let id: String
+    let text: String
+    let isTail: Bool
+}
+
+enum OpenCodeLargeMessageChunker {
+    static let minimumCharacterCount = 600
+    static let softCharacterLimit = 1_000
+    static let hardCharacterLimit = 1_800
+
+    private enum MarkdownBlockKind {
+        case paragraph
+        case heading
+        case listItem
+        case codeBlock
+        case blockQuote
+        case table
+    }
+
+    private struct MarkdownBlock {
+        let kind: MarkdownBlockKind
+        let text: String
+    }
+
+    private struct MarkdownLine {
+        let value: String
+        let text: String
+
+        var isBlank: Bool {
+            value.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+    }
+
+    private struct ListMarker {
+        let indent: Int
+    }
+
+    static func chunks(for message: OpenCodeMessageEnvelope) -> [OpenCodeLargeMessageChunk]? {
+        guard let text = chunkableText(in: message) else {
+            return nil
+        }
+
+        let chunks = makeChunks(from: text)
+        return chunks.count > 1 ? chunks : nil
+    }
+
+    static func chunkableText(in message: OpenCodeMessageEnvelope) -> String? {
+        guard (message.info.role ?? "").lowercased() == "assistant",
+              let part = chunkTextPart(in: message),
+              let text = part.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+              text.count >= minimumCharacterCount else {
+            return nil
+        }
+
+        return text
+    }
+
+    static func chunkTextPart(in message: OpenCodeMessageEnvelope) -> OpenCodePart? {
+        let textParts = message.parts.filter { part in
+            part.type == "text" && part.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }
+        guard textParts.count == 1 else { return nil }
+
+        let hasRenderableNonTextPart = message.parts.contains { part in
+            guard part.type != "text" else { return false }
+
+            if part.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                return true
+            }
+
+            return !["", "step-start", "step-finish", "reasoning"].contains(part.type)
+        }
+        guard !hasRenderableNonTextPart else { return nil }
+
+        return textParts[0]
+    }
+
+    static func makeChunks(from text: String) -> [OpenCodeLargeMessageChunk] {
+        makeChunks(fromNormalizedText: normalizedText(text), startingAt: 0)
+    }
+
+    static func makeChunks(fromNormalizedText normalizedText: String, startingAt startIndex: Int) -> [OpenCodeLargeMessageChunk] {
+        let blocks = markdownBlocks(fromNormalizedText: normalizedText)
+        let values = chunkValues(from: blocks)
+
+        return values.enumerated().map { index, value in
+            OpenCodeLargeMessageChunk(id: "chunk-\(startIndex + index)", text: value, isTail: index == values.count - 1)
+        }
+    }
+
+    static func normalizedText(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: "\u{2029}", with: "\n\n")
+            .replacingOccurrences(of: "\u{2028}", with: "\n")
+    }
+
+    static func isMarkdownListLine(_ line: String) -> Bool {
+        markdownListMarker(in: line) != nil
+    }
+
+    static func isMarkdownTableLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix("|") || trimmed.contains(" | ")
+    }
+
+    static func isMarkdownFenceLine(_ line: String) -> Bool {
+        markdownFenceMarker(in: line) != nil
+    }
+
+    static func structuralSignature(for message: OpenCodeMessageEnvelope) -> String {
+        let parts = message.parts.map { part in
+            [part.id ?? "", part.type].joined(separator: ":")
+        }
+
+        return [message.info.role ?? "", parts.joined(separator: "|")].joined(separator: "#")
+    }
+
+    private static func chunkValues(from blocks: [MarkdownBlock]) -> [String] {
+        var values: [String] = []
+        var paragraphBuffer = ""
+        var listBuffer = ""
+
+        func appendParagraphBuffer() {
+            guard !paragraphBuffer.isEmpty else { return }
+            values.append(paragraphBuffer)
+            paragraphBuffer = ""
+        }
+
+        func appendListBuffer() {
+            guard !listBuffer.isEmpty else { return }
+            values.append(listBuffer)
+            listBuffer = ""
+        }
+
+        func appendParagraphText(_ text: String) {
+            for value in splitPlainTextBlock(text) {
+                if paragraphBuffer.isEmpty {
+                    paragraphBuffer = value
+                } else if paragraphBuffer.count + value.count > softCharacterLimit {
+                    appendParagraphBuffer()
+                    paragraphBuffer = value
+                } else {
+                    paragraphBuffer += value
+                }
+
+                if paragraphBuffer.count >= hardCharacterLimit {
+                    appendParagraphBuffer()
+                }
+            }
+        }
+
+        for block in blocks {
+            switch block.kind {
+            case .paragraph:
+                appendListBuffer()
+                appendParagraphText(block.text)
+            case .listItem:
+                appendParagraphBuffer()
+                if !listBuffer.isEmpty, listBuffer.count + block.text.count > softCharacterLimit {
+                    appendListBuffer()
+                }
+                listBuffer += block.text
+            case .heading, .codeBlock, .blockQuote, .table:
+                appendParagraphBuffer()
+                appendListBuffer()
+                values.append(block.text)
+            }
+        }
+
+        appendParagraphBuffer()
+        appendListBuffer()
+
+        return values.filter { !$0.isEmpty }
+    }
+
+    private static func markdownBlocks(fromNormalizedText text: String) -> [MarkdownBlock] {
+        let lines = markdownLines(fromNormalizedText: text)
+        var blocks: [MarkdownBlock] = []
+        var index = 0
+
+        while index < lines.count {
+            if lines[index].isBlank {
+                blocks.append(MarkdownBlock(kind: .paragraph, text: consumeBlankLines(in: lines, index: &index)))
+                continue
+            }
+
+            if isMarkdownFenceLine(lines[index].value) {
+                blocks.append(MarkdownBlock(kind: .codeBlock, text: consumeFencedCodeBlock(in: lines, index: &index)))
+                continue
+            }
+
+            if isMarkdownTableStart(in: lines, at: index) {
+                blocks.append(MarkdownBlock(kind: .table, text: consumeMarkdownTable(in: lines, index: &index)))
+                continue
+            }
+
+            if isMarkdownBlockQuoteLine(lines[index].value) {
+                blocks.append(MarkdownBlock(kind: .blockQuote, text: consumeBlockQuote(in: lines, index: &index)))
+                continue
+            }
+
+            if isMarkdownHeadingLine(lines[index].value) {
+                blocks.append(MarkdownBlock(kind: .heading, text: consumeSingleLineBlock(in: lines, index: &index)))
+                continue
+            }
+
+            if markdownListMarker(in: lines[index].value) != nil {
+                blocks.append(MarkdownBlock(kind: .listItem, text: consumeListItem(in: lines, index: &index)))
+                continue
+            }
+
+            blocks.append(MarkdownBlock(kind: .paragraph, text: consumeParagraph(in: lines, index: &index)))
+        }
+
+        return blocks
+    }
+
+    private static func markdownLines(fromNormalizedText text: String) -> [MarkdownLine] {
+        let values = text.components(separatedBy: "\n")
+        return values.indices.map { index in
+            let isLast = index == values.index(before: values.endIndex)
+            return MarkdownLine(value: values[index], text: isLast ? values[index] : values[index] + "\n")
+        }
+    }
+
+    private static func consumeSingleLineBlock(in lines: [MarkdownLine], index: inout Int) -> String {
+        var text = lines[index].text
+        index += 1
+        text += consumeBlankLines(in: lines, index: &index)
+        return text
+    }
+
+    private static func consumeParagraph(in lines: [MarkdownLine], index: inout Int) -> String {
+        var text = ""
+
+        while index < lines.count {
+            if !text.isEmpty, isMarkdownBlockStart(in: lines, at: index) {
+                break
+            }
+
+            text += lines[index].text
+            let isBlank = lines[index].isBlank
+            index += 1
+
+            if isBlank {
+                text += consumeBlankLines(in: lines, index: &index)
+                break
+            }
+        }
+
+        return text
+    }
+
+    private static func consumeFencedCodeBlock(in lines: [MarkdownLine], index: inout Int) -> String {
+        let openingFence = markdownFenceMarker(in: lines[index].value)
+        var text = lines[index].text
+        index += 1
+
+        while index < lines.count {
+            let line = lines[index]
+            text += line.text
+            index += 1
+
+            if let openingFence, markdownFenceMarker(in: line.value) == openingFence {
+                text += consumeBlankLines(in: lines, index: &index)
+                break
+            }
+        }
+
+        return text
+    }
+
+    private static func consumeMarkdownTable(in lines: [MarkdownLine], index: inout Int) -> String {
+        var text = ""
+
+        while index < lines.count {
+            guard isMarkdownTableLine(lines[index].value) || isMarkdownTableSeparatorLine(lines[index].value) else {
+                break
+            }
+
+            text += lines[index].text
+            index += 1
+        }
+
+        text += consumeBlankLines(in: lines, index: &index)
+        return text
+    }
+
+    private static func consumeBlockQuote(in lines: [MarkdownLine], index: inout Int) -> String {
+        var text = ""
+
+        while index < lines.count, isMarkdownBlockQuoteLine(lines[index].value) {
+            text += lines[index].text
+            index += 1
+        }
+
+        text += consumeBlankLines(in: lines, index: &index)
+        return text
+    }
+
+    private static func consumeListItem(in lines: [MarkdownLine], index: inout Int) -> String {
+        guard let marker = markdownListMarker(in: lines[index].value) else { return consumeParagraph(in: lines, index: &index) }
+
+        var text = lines[index].text
+        var hasConsumedBlankLine = false
+        index += 1
+
+        while index < lines.count {
+            let line = lines[index]
+
+            if line.isBlank {
+                text += line.text
+                hasConsumedBlankLine = true
+                index += 1
+                continue
+            }
+
+            if let nextMarker = markdownListMarker(in: line.value), nextMarker.indent <= marker.indent {
+                break
+            }
+
+            let indent = leadingWhitespaceCount(in: line.value)
+            if hasConsumedBlankLine, indent <= marker.indent {
+                break
+            }
+
+            if indent <= marker.indent, isMarkdownBlockStart(in: lines, at: index) {
+                break
+            }
+
+            text += line.text
+            hasConsumedBlankLine = false
+            index += 1
+        }
+
+        return text
+    }
+
+    private static func consumeBlankLines(in lines: [MarkdownLine], index: inout Int) -> String {
+        var text = ""
+
+        while index < lines.count, lines[index].isBlank {
+            text += lines[index].text
+            index += 1
+        }
+
+        return text
+    }
+
+    private static func splitPlainTextBlock(_ text: String) -> [String] {
+        guard text.count > hardCharacterLimit else { return [text] }
+
+        var remaining = text
+        var values: [String] = []
+
+        while remaining.count > hardCharacterLimit {
+            let upperBound = remaining.index(remaining.startIndex, offsetBy: hardCharacterLimit)
+            let searchRange = remaining.startIndex..<upperBound
+            let splitIndex = bestPlainTextSplitIndex(in: remaining, range: searchRange) ?? upperBound
+            values.append(String(remaining[..<splitIndex]))
+            remaining = String(remaining[splitIndex...])
+        }
+
+        if !remaining.isEmpty {
+            values.append(remaining)
+        }
+
+        return values
+    }
+
+    private static func bestPlainTextSplitIndex(in text: String, range: Range<String.Index>) -> String.Index? {
+        var candidate = range.upperBound
+
+        while candidate > range.lowerBound {
+            let previous = text.index(before: candidate)
+            if text[previous] == "." || text[previous] == "!" || text[previous] == "?" || text[previous].isNewline {
+                return candidate
+            }
+            candidate = previous
+        }
+
+        candidate = range.upperBound
+        while candidate > range.lowerBound {
+            let previous = text.index(before: candidate)
+            if text[previous].isWhitespace {
+                return candidate
+            }
+            candidate = previous
+        }
+
+        return nil
+    }
+
+    private static func isMarkdownBlockStart(in lines: [MarkdownLine], at index: Int) -> Bool {
+        guard index < lines.count, !lines[index].isBlank else { return false }
+        return isMarkdownFenceLine(lines[index].value)
+            || isMarkdownTableStart(in: lines, at: index)
+            || isMarkdownBlockQuoteLine(lines[index].value)
+            || isMarkdownHeadingLine(lines[index].value)
+            || markdownListMarker(in: lines[index].value) != nil
+    }
+
+    private static func isMarkdownHeadingLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.hasPrefix("#") else { return false }
+
+        var level = 0
+        var index = trimmed.startIndex
+        while index < trimmed.endIndex, trimmed[index] == "#", level < 6 {
+            level += 1
+            index = trimmed.index(after: index)
+        }
+
+        return level > 0 && index < trimmed.endIndex && trimmed[index].isWhitespace
+    }
+
+    private static func isMarkdownBlockQuoteLine(_ line: String) -> Bool {
+        line.trimmingCharacters(in: .whitespaces).hasPrefix(">")
+    }
+
+    private static func isMarkdownTableStart(in lines: [MarkdownLine], at index: Int) -> Bool {
+        guard index + 1 < lines.count else { return false }
+        return isMarkdownTableLine(lines[index].value) && isMarkdownTableSeparatorLine(lines[index + 1].value)
+    }
+
+    private static func markdownListMarker(in line: String) -> ListMarker? {
+        let indent = leadingWhitespaceCount(in: line)
+        let trimmed = line.dropFirst(min(indent, line.count))
+        guard !trimmed.isEmpty else { return nil }
+
+        let prefixes = ["- [ ] ", "- [x] ", "- [X] ", "* [ ] ", "* [x] ", "* [X] ", "+ [ ] ", "+ [x] ", "+ [X] ", "- ", "* ", "+ "]
+        if prefixes.contains(where: { trimmed.hasPrefix($0) }) {
+            return ListMarker(indent: indent)
+        }
+
+        var digitCount = 0
+        var index = trimmed.startIndex
+        while index < trimmed.endIndex, trimmed[index].isNumber, digitCount < 6 {
+            digitCount += 1
+            index = trimmed.index(after: index)
+        }
+
+        guard digitCount > 0, index < trimmed.endIndex else { return nil }
+        guard trimmed[index] == "." || trimmed[index] == ")" else { return nil }
+        let nextIndex = trimmed.index(after: index)
+        guard nextIndex < trimmed.endIndex, trimmed[nextIndex].isWhitespace else { return nil }
+        return ListMarker(indent: indent)
+    }
+
+    private static func leadingWhitespaceCount(in line: String) -> Int {
+        var count = 0
+        for character in line {
+            if character == " " {
+                count += 1
+            } else if character == "\t" {
+                count += 4
+            } else {
+                break
+            }
+        }
+
+        return count
+    }
+
+    private static func isMarkdownTableSeparatorLine(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard trimmed.contains("|") else { return false }
+        let cells = trimmed
+            .trimmingCharacters(in: CharacterSet(charactersIn: "|"))
+            .split(separator: "|", omittingEmptySubsequences: false)
+        guard cells.count >= 2 else { return false }
+        return cells.allSatisfy { cell in
+            let value = cell.trimmingCharacters(in: .whitespaces)
+            guard value.count >= 3, value.contains("-") else { return false }
+            return value.allSatisfy { $0 == "-" || $0 == ":" }
+        }
+    }
+
+    private static func markdownFenceMarker(in line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.hasPrefix("```") { return "```" }
+        if trimmed.hasPrefix("~~~") { return "~~~" }
+        return nil
+    }
+}
+
+final class OpenCodeLargeMessageChunkCache {
+    private struct Entry {
+        let signature: String
+        var text: String
+        var normalizedText: String
+        var frozenChunks: [OpenCodeLargeMessageChunk]
+        var liveTail: String
+
+        var result: [OpenCodeLargeMessageChunk]? {
+            var chunks = frozenChunks
+            if !liveTail.isEmpty {
+                chunks.append(OpenCodeLargeMessageChunk(id: "chunk-\(frozenChunks.count)", text: liveTail, isTail: true))
+            }
+
+            return chunks.count > 1 ? chunks : nil
+        }
+
+        init(signature: String, text: String) {
+            self.signature = signature
+            self.text = text
+            self.normalizedText = OpenCodeLargeMessageChunker.normalizedText(text)
+
+            let chunks = OpenCodeLargeMessageChunker.makeChunks(fromNormalizedText: normalizedText, startingAt: 0)
+            self.frozenChunks = Array(chunks.dropLast())
+            self.liveTail = chunks.last?.text ?? ""
+        }
+
+        mutating func append(_ suffix: String) {
+            guard !suffix.isEmpty else { return }
+
+            let normalizedSuffix = OpenCodeLargeMessageChunker.normalizedText(suffix)
+            text += suffix
+            normalizedText += normalizedSuffix
+
+            let mutableText = liveTail + normalizedSuffix
+            let mutableChunks = OpenCodeLargeMessageChunker.makeChunks(
+                fromNormalizedText: mutableText,
+                startingAt: frozenChunks.count
+            )
+
+            frozenChunks.append(contentsOf: mutableChunks.dropLast())
+            liveTail = mutableChunks.last?.text ?? ""
+        }
+    }
+
+    private var entries: [String: Entry] = [:]
+
+    func chunks(for message: OpenCodeMessageEnvelope, isStreaming: Bool) -> [OpenCodeLargeMessageChunk]? {
+        if isStreaming {
+            return chunks(for: message)
+        }
+
+        return finalizedChunks(for: message)
+    }
+
+    func chunks(for message: OpenCodeMessageEnvelope) -> [OpenCodeLargeMessageChunk]? {
+        guard let text = OpenCodeLargeMessageChunker.chunkableText(in: message) else {
+            entries[message.id] = nil
+            return nil
+        }
+
+        let signature = OpenCodeLargeMessageChunker.structuralSignature(for: message)
+
+        if var entry = entries[message.id], entry.signature == signature {
+            if entry.text == text {
+                return entry.result
+            }
+
+            if text.hasPrefix(entry.text) {
+                let suffixStart = text.index(text.startIndex, offsetBy: entry.text.count)
+                entry.append(String(text[suffixStart...]))
+                entries[message.id] = entry
+                return entry.result
+            }
+        }
+
+        let entry = Entry(signature: signature, text: text)
+        entries[message.id] = entry
+        return entry.result
+    }
+
+    private func finalizedChunks(for message: OpenCodeMessageEnvelope) -> [OpenCodeLargeMessageChunk]? {
+        guard let text = OpenCodeLargeMessageChunker.chunkableText(in: message) else {
+            entries[message.id] = nil
+            return nil
+        }
+
+        let signature = OpenCodeLargeMessageChunker.structuralSignature(for: message)
+        if let entry = entries[message.id], entry.signature == signature, entry.text == text {
+            return entry.result
+        }
+
+        let entry = Entry(signature: signature, text: text)
+        entries[message.id] = entry
+        return entry.result
+    }
+
+    func prune(keeping messageIDs: Set<String>) {
+        entries = entries.filter { messageIDs.contains($0.key) }
+    }
+}
+
 fileprivate enum AppleIntelligenceInstructionTab: String, CaseIterable, Identifiable {
     case user
     case system
@@ -79,8 +670,16 @@ private struct CompactionDisplayItem: Identifiable {
     }
 }
 
+private struct LargeMessageChunkDisplayItem: Identifiable {
+    let message: OpenCodeMessageEnvelope
+    let chunk: OpenCodeLargeMessageChunk
+
+    var id: String { "message-chunk-\(message.id)-\(chunk.id)" }
+}
+
 private enum ChatDisplayItem: Identifiable {
     case message(OpenCodeMessageEnvelope)
+    case largeMessageChunk(LargeMessageChunkDisplayItem)
     case compaction(CompactionDisplayItem)
     case findPlaceReveal(FindPlaceGameCity)
     case findBugSolved
@@ -89,6 +688,8 @@ private enum ChatDisplayItem: Identifiable {
         switch self {
         case let .message(message):
             return message.id
+        case let .largeMessageChunk(item):
+            return item.id
         case let .compaction(item):
             return item.id
         case let .findPlaceReveal(city):
@@ -105,6 +706,35 @@ private struct PendingOutgoingSend {
     let shouldAnimateBubble: Bool
     let messageID: String?
     let partID: String?
+}
+
+private struct LargeMessageChunkRow: View, Equatable {
+    let text: String
+    let allowsTextSelection: Bool
+    let isStreamingTail: Bool
+
+    var body: some View {
+        if allowsTextSelection {
+            content.textSelection(.enabled)
+        } else {
+            content.textSelection(.disabled)
+        }
+    }
+
+    private var content: some View {
+        HStack(alignment: .top, spacing: 0) {
+            MarkdownMessageText(
+                text: text,
+                isUser: false,
+                style: .standard,
+                isStreaming: isStreamingTail,
+                animatesStreamingText: false
+            )
+
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
 
 private struct ReadingModeScrollRequest: Equatable {
@@ -315,10 +945,12 @@ private struct FallbackMedalView: View {
 
 private final class ChatViewTaskStore {
     var autoScrollTask: Task<Void, Never>?
+    var streamingAutoScrollTask: Task<Void, Never>?
+    var composerDraftPersistenceTask: Task<Void, Never>?
+    var lastStreamingAutoScrollAt = Date.distantPast
 }
 
 private struct MessageComposerSnapshot: Equatable {
-    let textValue: String
     let isAccessoryMenuOpenValue: Bool
     let commands: [OpenCodeCommand]
     let attachmentCount: Int
@@ -330,7 +962,7 @@ private struct MessageComposerSnapshot: Equatable {
 }
 
 private struct EquatableMessageComposerHost: View, Equatable {
-    let text: Binding<String>
+    let draftStore: MessageComposerDraftStore
     let isAccessoryMenuOpen: Binding<Bool>
     let snapshot: MessageComposerSnapshot
     let commands: [OpenCodeCommand]
@@ -346,6 +978,7 @@ private struct EquatableMessageComposerHost: View, Equatable {
     let actionSignature: String
     let onInputFrameChange: (CGRect) -> Void
     let onFocusChange: (Bool) -> Void
+    let onTextChange: (String) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
     let onSelectCommand: (OpenCodeCommand) -> Void
@@ -361,7 +994,7 @@ private struct EquatableMessageComposerHost: View, Equatable {
 
     var body: some View {
         MessageComposer(
-            text: text,
+            draftStore: draftStore,
             isAccessoryMenuOpen: isAccessoryMenuOpen,
             commands: commands,
             attachmentCount: attachmentCount,
@@ -375,6 +1008,7 @@ private struct EquatableMessageComposerHost: View, Equatable {
             mcpErrorMessage: mcpErrorMessage,
             onInputFrameChange: onInputFrameChange,
             onFocusChange: onFocusChange,
+            onTextChange: onTextChange,
             onSend: onSend,
             onStop: onStop,
             onSelectCommand: onSelectCommand,
@@ -402,6 +1036,7 @@ struct ChatView: View {
     @State private var questionAnswers: [String: Set<String>] = [:]
     @State private var questionCustomAnswers: [String: String] = [:]
     @State private var taskStore = ChatViewTaskStore()
+    @State private var composerDraftStore = MessageComposerDraftStore()
     @State private var isComposerInputFocused = false
     @State private var shouldSnapOnNextMessage = false
     @State private var shouldDelayNextUserInsertScroll = false
@@ -434,15 +1069,18 @@ struct ChatView: View {
     @State private var shouldShowLoadingIndicator = false
     @State private var chatContentOffsetY: CGFloat = 14
     @State private var isScrollGeometryAtBottom = true
+    @State private var shouldFollowStreamingUpdates = true
     @State private var isRefreshingChatData = false
     @State private var bottomPullDistance: CGFloat = 0
     @State private var bottomPullStartedAtBottom = false
     @State private var bottomPullIsTracking = false
     @State private var hasFiredBottomPullHaptic = false
+    @State private var largeMessageChunkCache = OpenCodeLargeMessageChunkCache()
 
     @State private var selectedInstructionTab: AppleIntelligenceInstructionTab = .user
 
     private let messageWindowSize = 10
+    private let streamingAutoScrollMinimumInterval: TimeInterval = 0.12
     private let bottomRefreshThreshold: CGFloat = 72
     private let bottomRefreshIndicatorHeight: CGFloat = 34
     private var todoIDs: String {
@@ -455,12 +1093,6 @@ struct ChatView: View {
 
     private var questionIDs: String {
         viewModel.questions(for: sessionID).map { $0.id }.joined(separator: "|")
-    }
-
-    private var listAnimationSignature: String {
-        displayedChatItems
-            .map(\.id)
-            .joined(separator: "|")
     }
 
     private var liveSession: OpenCodeSession {
@@ -538,7 +1170,15 @@ struct ChatView: View {
             return false
         }
 
-        return hasLoadedInitialWindow && !isScrollGeometryAtBottom && !shouldShowChatLoadingOverlay
+        return hasLoadedInitialWindow && !isScrollGeometryAtBottom && !shouldFollowStreamingUpdates && !shouldShowChatLoadingOverlay
+    }
+
+    private var shouldAutoFollowBottom: Bool {
+        isScrollGeometryAtBottom || shouldFollowStreamingUpdates
+    }
+
+    private var chatItemChangeAnimation: Animation? {
+        isReadingModeStreamActive ? nil : .snappy(duration: 0.28, extraBounce: 0.02)
     }
 
     private var hasReadingModeOverflowContent: Bool {
@@ -615,6 +1255,9 @@ struct ChatView: View {
 
             GeometryReader { geometry in
                 ScrollViewReader { proxy in
+                    let chatItems = displayedChatItems
+                    let chatItemIDSignature = chatItems.map(\.id).joined(separator: "|")
+
                     List {
                         if hiddenMessageCount > 0 {
                             Button {
@@ -634,7 +1277,7 @@ struct ChatView: View {
                             .listRowBackground(Color.clear)
                         }
 
-                        ForEach(displayedChatItems) { item in
+                        ForEach(chatItems) { item in
                             chatRow(for: item)
                         }
 
@@ -647,7 +1290,7 @@ struct ChatView: View {
                     .listStyle(.plain)
                     .chatScrollBottomTracking($isScrollGeometryAtBottom)
                     .simultaneousGesture(bottomOverscrollRefreshGesture)
-                    .animation(.snappy(duration: 0.28, extraBounce: 0.02), value: listAnimationSignature)
+                    .animation(chatItemChangeAnimation, value: chatItemIDSignature)
                     .scrollContentBackground(.hidden)
                     .opencodeInteractiveKeyboardDismiss()
                     .background(OpenCodePlatformColor.groupedBackground)
@@ -688,7 +1331,7 @@ struct ChatView: View {
                             scheduleReadingModeScroll(to: request.messageID, with: proxy)
                             return
                         }
-                        guard isScrollGeometryAtBottom, !isSendReadingModeActive else { return }
+                        guard shouldAutoFollowBottom, !isSendReadingModeActive else { return }
                         scheduleScrollToBottom(with: proxy, delayMS: 20)
                     }
                     .onChange(of: composerOverlayHeight) { oldHeight, newHeight in
@@ -699,7 +1342,7 @@ struct ChatView: View {
                             scheduleComposerAffordanceFollow(with: proxy, delayMS: 60)
                             return
                         }
-                        guard !isSendReadingModeActive, shouldFollowComposerAffordanceChange || isScrollGeometryAtBottom else { return }
+                        guard !isSendReadingModeActive, shouldFollowComposerAffordanceChange || shouldAutoFollowBottom else { return }
                         shouldFollowComposerAffordanceChange = false
                         scheduleComposerAffordanceFollow(with: proxy, delayMS: 20)
                     }
@@ -728,7 +1371,7 @@ struct ChatView: View {
                             return
                         }
 
-                        if !isSendReadingModeActive, shouldSnapOnNextMessage || isScrollGeometryAtBottom {
+                        if !isSendReadingModeActive, shouldSnapOnNextMessage || shouldAutoFollowBottom {
                             shouldSnapOnNextMessage = false
                             let delay = shouldDelayNextUserInsertScroll ? 180 : 10
                             shouldDelayNextUserInsertScroll = false
@@ -738,14 +1381,21 @@ struct ChatView: View {
                         updateChatContentVisibility()
                     }
                     .onChange(of: streamingFollowSignature) { _, _ in
-                        guard hasLoadedInitialWindow, isScrollGeometryAtBottom, !isComposerInputFocused, !isSendReadingModeActive else { return }
-                        scheduleScrollToBottom(with: proxy)
+                        guard hasLoadedInitialWindow, shouldAutoFollowBottom, !isComposerInputFocused, !isSendReadingModeActive else { return }
+                        scheduleStreamingScrollToBottom(with: proxy)
                     }
                     .onChange(of: jumpToLatestRequest) { _, _ in
                         scrollToBottom(with: proxy, animated: true)
                     }
                     .onChange(of: isLoadingSelectedSession) { _, _ in
                         updateChatContentVisibility()
+                    }
+                    .onChange(of: isScrollGeometryAtBottom) { _, isAtBottom in
+                        if isAtBottom {
+                            shouldFollowStreamingUpdates = true
+                        } else if !isReadingModeStreamActive {
+                            shouldFollowStreamingUpdates = false
+                        }
                     }
                     .onChange(of: isReadingModeStreamActive) { _, isActive in
                         updateReadingModeBottomSpacerHeight(animated: !isActive)
@@ -778,10 +1428,14 @@ struct ChatView: View {
         .opencodeInlineNavigationTitle()
         .onAppear {
             viewModel.activeChatSessionID = sessionID
+            syncComposerDraftFromViewModel()
         }
         .onDisappear {
+            persistComposerDraftNow()
             viewModel.setComposerStreamingFocus(false)
             taskStore.autoScrollTask?.cancel()
+            taskStore.streamingAutoScrollTask?.cancel()
+            taskStore.composerDraftPersistenceTask?.cancel()
             contentRevealTask?.cancel()
             loadingIndicatorTask?.cancel()
             pendingOutgoingSendTask?.cancel()
@@ -867,15 +1521,49 @@ struct ChatView: View {
         .onChange(of: viewModel.messages.count) { _, _ in
             copiedTranscript = false
         }
+        .onChange(of: viewModel.composerResetToken) { _, _ in
+            syncComposerDraftFromViewModel()
+        }
     }
 
-    private var draftTextBinding: Binding<String> {
-        Binding(
-            get: { viewModel.draftMessage },
-            set: { newValue in
-                viewModel.setDraftMessage(newValue, forSessionID: sessionID)
-            }
-        )
+    private func syncComposerDraftFromViewModel() {
+        guard viewModel.selectedSession?.id == sessionID else { return }
+        taskStore.composerDraftPersistenceTask?.cancel()
+        if composerDraftStore.text != viewModel.draftMessage {
+            composerDraftStore.text = viewModel.draftMessage
+        }
+    }
+
+    private func scheduleComposerDraftPersistence(_ text: String) {
+        taskStore.composerDraftPersistenceTask?.cancel()
+        taskStore.composerDraftPersistenceTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(750))
+            guard !Task.isCancelled else { return }
+            viewModel.saveMessageDraft(text, forSessionID: sessionID, updateActiveDraft: false)
+        }
+    }
+
+    private func persistComposerDraftNow(removesEmpty: Bool = true) {
+        taskStore.composerDraftPersistenceTask?.cancel()
+        viewModel.saveMessageDraft(composerDraftStore.text, forSessionID: sessionID, removesEmpty: removesEmpty)
+    }
+
+    private func clearComposerDraft() {
+        taskStore.composerDraftPersistenceTask?.cancel()
+        if !composerDraftStore.text.isEmpty {
+            composerDraftStore.text = ""
+        }
+        viewModel.saveMessageDraft("", forSessionID: sessionID)
+        viewModel.composerResetToken = UUID()
+    }
+
+    private func restoreComposerDraft(_ text: String) {
+        taskStore.composerDraftPersistenceTask?.cancel()
+        if composerDraftStore.text != text {
+            composerDraftStore.text = text
+        }
+        viewModel.saveMessageDraft(text, forSessionID: sessionID)
+        viewModel.composerResetToken = UUID()
     }
 
     private var composerStack: some View {
@@ -956,7 +1644,6 @@ struct ChatView: View {
             .map { "\($0.name):\($0.status.status):\($0.status.error ?? "")" }
             .joined(separator: "|") + "|loading=\(viewModel.directoryState.isLoadingMCP)|toggling=\(viewModel.directoryState.togglingMCPServerNames.sorted().joined(separator: ","))|error=\(viewModel.directoryState.mcpErrorMessage ?? "")"
         let snapshot = MessageComposerSnapshot(
-            textValue: viewModel.draftMessage,
             isAccessoryMenuOpenValue: isComposerMenuOpen,
             commands: commands,
             attachmentCount: viewModel.draftAttachments.count,
@@ -968,7 +1655,7 @@ struct ChatView: View {
         )
 
         let composer = EquatableMessageComposerHost(
-            text: draftTextBinding,
+            draftStore: composerDraftStore,
             isAccessoryMenuOpen: $isComposerMenuOpen,
             snapshot: snapshot,
             commands: commands,
@@ -987,6 +1674,9 @@ struct ChatView: View {
                 isComposerInputFocused = isFocused
                 viewModel.setComposerStreamingFocus(isFocused)
             },
+            onTextChange: { text in
+                scheduleComposerDraftPersistence(text)
+            },
             onSend: {
                 startOutgoingBubbleAnimationAndSend()
             },
@@ -996,8 +1686,7 @@ struct ChatView: View {
             onSelectCommand: { command in
                 viewModel.flushBufferedTranscript(reason: "command action")
                 if viewModel.isForkClientCommand(command) {
-                    viewModel.draftMessage = ""
-                    viewModel.clearPersistedMessageDraft(forSessionID: sessionID)
+                    clearComposerDraft()
                     viewModel.presentForkSessionSheet()
                     return
                 }
@@ -1150,7 +1839,27 @@ struct ChatView: View {
         }
     }
 
+    private func scheduleStreamingScrollToBottom(with proxy: ScrollViewProxy) {
+        guard taskStore.streamingAutoScrollTask == nil else { return }
+
+        let elapsed = Date().timeIntervalSince(taskStore.lastStreamingAutoScrollAt)
+        let delayMS = max(0, Int((streamingAutoScrollMinimumInterval - elapsed) * 1000))
+
+        taskStore.streamingAutoScrollTask = Task { @MainActor in
+            defer { taskStore.streamingAutoScrollTask = nil }
+            if delayMS > 0 {
+                try? await Task.sleep(for: .milliseconds(delayMS))
+            }
+            guard !Task.isCancelled else { return }
+            guard hasLoadedInitialWindow, shouldAutoFollowBottom, !isComposerInputFocused, !isSendReadingModeActive else { return }
+
+            taskStore.lastStreamingAutoScrollAt = Date()
+            scrollToBottom(with: proxy, animated: false)
+        }
+    }
+
     private func scrollToBottom(with proxy: ScrollViewProxy, animated: Bool) {
+        shouldFollowStreamingUpdates = true
         if animated {
             withAnimation(.easeOut(duration: 0.24)) {
                 proxy.scrollTo("chat-bottom-anchor", anchor: .bottom)
@@ -1197,6 +1906,10 @@ struct ChatView: View {
     private var bottomOverscrollRefreshGesture: some Gesture {
         DragGesture(minimumDistance: 8, coordinateSpace: .local)
             .onChanged { value in
+                if value.translation.height > 4 {
+                    shouldFollowStreamingUpdates = false
+                }
+
                 if !bottomPullIsTracking {
                     bottomPullIsTracking = true
                     bottomPullStartedAtBottom = isScrollGeometryAtBottom && !isRefreshingChatData
@@ -1334,6 +2047,8 @@ struct ChatView: View {
         switch item {
         case let .message(message):
             messageRow(for: message)
+        case let .largeMessageChunk(item):
+            largeMessageChunkRow(for: item)
         case let .compaction(compaction):
             compactionRow(for: compaction)
         case let .findPlaceReveal(city):
@@ -1348,6 +2063,58 @@ struct ChatView: View {
                 .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 14, trailing: 16))
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
+        }
+    }
+
+    private func largeMessageChunkRow(for item: LargeMessageChunkDisplayItem) -> some View {
+        let isStreaming = isStreamingMessage(item.message)
+
+        return LargeMessageChunkRow(
+            text: item.chunk.text,
+            allowsTextSelection: !isStreaming,
+            isStreamingTail: isStreaming && item.chunk.isTail
+        )
+            .equatable()
+            .contextMenu {
+                messageChunkContextMenu(for: item.message)
+            }
+            .id(item.id)
+            .transition(.identity)
+            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: item.chunk.isTail ? 6 : 0, trailing: 16))
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+    }
+
+    @ViewBuilder
+    private func messageChunkContextMenu(for message: OpenCodeMessageEnvelope) -> some View {
+        Button {} label: {
+            Label("Agent: \(message.info.agent?.nilIfEmpty ?? "Default")", systemImage: "person.crop.circle")
+        }
+        .disabled(true)
+
+        Button {} label: {
+            if let model = message.info.model {
+                Label("Model: \(model.providerID)/\(model.modelID)", systemImage: "cpu")
+            } else {
+                Label("Model: Default", systemImage: "cpu")
+            }
+        }
+        .disabled(true)
+
+        Divider()
+
+        Button {
+            selectedMessageDebugPayload = MessageDebugPayload(message: message)
+        } label: {
+            Label("Debug JSON", systemImage: "curlybraces")
+        }
+
+        if let copiedText = message.copiedTextContent() {
+            Button {
+                OpenCodeClipboard.copy(copiedText)
+            } label: {
+                Label("Copy Message", systemImage: "doc.on.doc")
+            }
         }
     }
 
@@ -1372,14 +2139,22 @@ struct ChatView: View {
         } onInspectDebugMessage: { debugMessage in
             selectedMessageDebugPayload = MessageDebugPayload(message: debugMessage)
         }
-        .transition(message.id == readingModeScrollRequest?.messageID ? .identity : .asymmetric(
-            insertion: .move(edge: .bottom).combined(with: .opacity),
-            removal: .opacity
-        ))
+        .transition(messageRowTransition(for: message))
         .id(message.id)
         .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
         .listRowSeparator(.hidden)
         .listRowBackground(Color.clear)
+    }
+
+    private func messageRowTransition(for message: OpenCodeMessageEnvelope) -> AnyTransition {
+        if message.id == readingModeScrollRequest?.messageID || isStreamingMessage(message) {
+            return .identity
+        }
+
+        return .asymmetric(
+            insertion: .move(edge: .bottom).combined(with: .opacity),
+            removal: .opacity
+        )
     }
 
     private func compactionRow(for compaction: CompactionDisplayItem) -> some View {
@@ -1401,6 +2176,8 @@ struct ChatView: View {
     private func makeDisplayItems(from messages: [OpenCodeMessageEnvelope]) -> [ChatDisplayItem] {
         var result: [ChatDisplayItem] = []
         var displayedIDs: Set<String> = []
+        let displayedMessageIDs = Set(messages.map(\.id))
+        largeMessageChunkCache.prune(keeping: displayedMessageIDs)
         let findPlaceGame = viewModel.findPlaceGame(for: sessionID)
         let findBugGame = viewModel.findBugGame(for: sessionID)
 
@@ -1435,6 +2212,13 @@ struct ChatView: View {
             if message.parts.contains(where: \.isCompaction) {
                 let summary = compactionSummary(for: message, at: index, in: messages)
                 appendUnique(.compaction(CompactionDisplayItem(boundaryMessage: message, summaryMessage: summary)))
+                continue
+            }
+
+            if let chunks = largeMessageChunkCache.chunks(for: message, isStreaming: isStreamingMessage(message)) {
+                for chunk in chunks {
+                    appendUnique(.largeMessageChunk(LargeMessageChunkDisplayItem(message: message, chunk: chunk)))
+                }
                 continue
             }
 
@@ -1520,7 +2304,8 @@ struct ChatView: View {
     }
 
     private func startOutgoingBubbleAnimationAndSend() {
-        let draftText = viewModel.draftMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        persistComposerDraftNow()
+        let draftText = composerDraftStore.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let draftAttachments = viewModel.draftAttachments
         let hasAttachments = !draftAttachments.isEmpty
 
@@ -1529,9 +2314,7 @@ struct ChatView: View {
 
         if !hasAttachments,
            (viewModel.shouldOpenForkSheet(forSlashInput: draftText) || viewModel.slashCommandInput(from: draftText).map({ viewModel.isForkClientCommand($0.command) }) == true) {
-            viewModel.draftMessage = ""
-            viewModel.clearPersistedMessageDraft(forSessionID: sessionID)
-            viewModel.composerResetToken = UUID()
+            clearComposerDraft()
             viewModel.presentForkSessionSheet()
             return
         }
@@ -1542,9 +2325,7 @@ struct ChatView: View {
 
         if !hasAttachments,
            viewModel.slashCommandInput(from: draftText).map({ viewModel.isCompactClientCommand($0.command) }) == true {
-            viewModel.draftMessage = ""
-            viewModel.clearPersistedMessageDraft(forSessionID: sessionID)
-            viewModel.composerResetToken = UUID()
+            clearComposerDraft()
             shouldSnapOnNextMessage = true
             Task { await viewModel.compactSession(sessionID: sessionID, userVisible: true, meterPrompt: false) }
             return
@@ -1572,10 +2353,8 @@ struct ChatView: View {
         pendingOutgoingSendTask?.cancel()
         pendingOutgoingSend = pendingSend
         updateReadingModeBottomSpacerHeight(animated: false)
-        viewModel.draftMessage = ""
+        clearComposerDraft()
         viewModel.clearDraftAttachments()
-        viewModel.clearPersistedMessageDraft(forSessionID: sessionID)
-        viewModel.composerResetToken = UUID()
 
         if shouldAnimateBubble {
             scheduleOutgoingEntryAnimation(messageID: preparedIDs.messageID)
@@ -1672,9 +2451,8 @@ struct ChatView: View {
                 preparingOutgoingMessageID = nil
                 animatingOutgoingMessageID = nil
             }
-            viewModel.draftMessage = pendingSend.text
+            restoreComposerDraft(pendingSend.text)
             viewModel.addDraftAttachments(pendingSend.attachments)
-            viewModel.persistCurrentMessageDraft(forSessionID: sessionID)
             return
         }
 
