@@ -38,6 +38,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>OpenClient uses your photo library to show recent photos and attach selected images to messages.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>OpenCodeSharedKeychainAccessGroup</key>

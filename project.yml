@@ -82,6 +82,7 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
+        NSPhotoLibraryUsageDescription: OpenClient uses your photo library to show recent photos and attach selected images to messages.
         CFBundleURLTypes:
           - CFBundleURLName: com.ntoporcov.openclient
             CFBundleURLSchemes:
