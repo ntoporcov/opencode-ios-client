@@ -18,6 +18,22 @@ struct SessionListView: View {
                     .listRowSeparator(.hidden)
             }
 
+            if viewModel.hasProUnlock {
+                if !viewModel.currentProjectActions.isEmpty {
+                    ProjectActionStrip(viewModel: viewModel, actions: viewModel.currentProjectActions)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 8, trailing: 0))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
+            } else {
+                LockedProjectActionStrip {
+                    viewModel.presentPaywall(reason: .actions)
+                }
+                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 0))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            }
+
             if snapshot.isLoadingEmpty {
                 Section {
                     ForEach(0 ..< 3, id: \.self) { _ in
@@ -123,7 +139,7 @@ struct SessionListView: View {
         let sessions = viewModel.sessions
         let pinnedIDs = viewModel.pinnedSessionIDs
         var sessionsByID = Dictionary(uniqueKeysWithValues: sessions.map { ($0.id, $0) })
-        for session in viewModel.workspaceSessionsByDirectory.values.flatMap(\.rootSessions) {
+        for session in viewModel.workspaceSessionsByDirectory.values.flatMap(\.rootSessions) where !viewModel.isActionSession(session) {
             sessionsByID[session.id] = session
         }
         let pinnedSessions = pinnedIDs.compactMap { sessionsByID[$0] }
@@ -145,7 +161,7 @@ struct SessionListView: View {
     private func workspaceSections(excluding pinnedIDSet: Set<String>) -> [WorkspaceSessionSection] {
         viewModel.workspaceDirectories().map { directory in
             let state = viewModel.workspaceSessionsByDirectory[directory] ?? OpenCodeWorkspaceSessionState()
-            let sessions = state.rootSessions.filter { !pinnedIDSet.contains($0.id) }
+            let sessions = state.rootSessions.filter { !pinnedIDSet.contains($0.id) && !viewModel.isActionSession($0) }
             return WorkspaceSessionSection(
                 directory: directory,
                 title: viewModel.workspaceDisplayName(for: directory) ?? URL(fileURLWithPath: directory).lastPathComponent,
@@ -328,6 +344,140 @@ struct SessionListView: View {
             )
         }
         .tint(.indigo)
+    }
+}
+
+private struct ProjectActionStrip: View {
+    @ObservedObject var viewModel: AppViewModel
+    let actions: [OpenCodeAction]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Label("Actions", systemImage: "bolt.fill")
+                    .font(.headline)
+
+                Spacer(minLength: 0)
+            }
+            .padding(.trailing, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 10) {
+                    ForEach(actions) { action in
+                        ProjectActionChip(
+                            action: action,
+                            command: viewModel.actionCommand(for: action),
+                            phase: viewModel.actionRunPhase(for: action)
+                        ) {
+                            Task { await viewModel.runAction(action) }
+                        }
+                    }
+                }
+                .padding(.trailing, 16)
+            }
+        }
+    }
+}
+
+private struct ProjectActionChip: View {
+    let action: OpenCodeAction
+    let command: OpenCodeCommand?
+    let phase: OpenCodeActionRunPhase?
+    let onRun: () -> Void
+
+    var body: some View {
+        Button(action: onRun) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(tint.opacity(0.14))
+                        .frame(width: 38, height: 38)
+
+                    if phase != nil {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: action.iconName)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(tint)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("/\(action.commandName)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(command == nil ? .red : .secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(minWidth: 148, alignment: .leading)
+            .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(tint.opacity(phase == nil ? 0.12 : 0.32), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(phase != nil || command == nil)
+        .accessibilityIdentifier("session.action.\(action.commandName)")
+    }
+
+    private var tint: Color {
+        phase == nil ? .orange : .accentColor
+    }
+
+    private var subtitle: String {
+        if let phase {
+            return phase.title
+        }
+        if command == nil {
+            return "Unavailable"
+        }
+        return "Run action"
+    }
+}
+
+private struct LockedProjectActionStrip: View {
+    let onUnlock: () -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 10) {
+                Button(action: onUnlock) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(.orange)
+                            .frame(width: 38, height: 38)
+                            .background(.orange.opacity(0.14), in: Circle())
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Actions")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+
+                            Text("Unlock Pro")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+                    .background(OpenCodePlatformColor.secondaryGroupedBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .strokeBorder(Color.orange.opacity(0.16), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(.trailing, 16)
+        }
     }
 }
 

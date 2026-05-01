@@ -14,12 +14,14 @@ enum OpenClientCommerceLimits {
 enum OpenClientPaywallReason: Identifiable, Equatable {
     case promptLimit
     case sessionLimit
+    case actions
     case manual
 
     var id: String {
         switch self {
         case .promptLimit: "promptLimit"
         case .sessionLimit: "sessionLimit"
+        case .actions: "actions"
         case .manual: "manual"
         }
     }
@@ -28,6 +30,7 @@ enum OpenClientPaywallReason: Identifiable, Equatable {
         switch self {
         case .promptLimit: "Daily Prompt Limit Reached"
         case .sessionLimit: "Create Unlimited Sessions"
+        case .actions: "Unlock Actions"
         case .manual: "OpenClient Pro"
         }
     }
@@ -38,6 +41,8 @@ enum OpenClientPaywallReason: Identifiable, Equatable {
             "Upgrade once to send unlimited prompts and support continued development of the open-source app."
         case .sessionLimit:
             "Free users can create one session. Upgrade once for unlimited sessions and prompts."
+        case .actions:
+            "Actions run project commands in temporary sessions and only surface when they need your attention."
         case .manual:
             "Unlock unlimited prompts and sessions, plus support the signed App Store build."
         }

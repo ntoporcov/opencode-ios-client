@@ -463,6 +463,14 @@ extension AppViewModel {
         return decoded
     }
 
+    func loadProjectActionsByScope() -> [String: [OpenCodeAction]] {
+        guard let data = UserDefaults.standard.data(forKey: StorageKey.projectActionsByScope),
+              let decoded = try? JSONDecoder().decode([String: [OpenCodeAction]].self, from: data) else {
+            return [:]
+        }
+        return decoded
+    }
+
     func persistSessionPreviews() {
         guard let data = try? JSONEncoder().encode(sessionPreviews) else { return }
         UserDefaults.standard.set(data, forKey: StorageKey.sessionPreviews)
@@ -481,6 +489,11 @@ extension AppViewModel {
     func persistProjectWorkspacesEnabledByScope() {
         guard let data = try? JSONEncoder().encode(projectWorkspacesEnabledByScope) else { return }
         UserDefaults.standard.set(data, forKey: StorageKey.projectWorkspacesEnabledByScope)
+    }
+
+    func persistProjectActionsByScope() {
+        guard let data = try? JSONEncoder().encode(projectActionsByScope) else { return }
+        UserDefaults.standard.set(data, forKey: StorageKey.projectActionsByScope)
     }
 
     func setSessionPreview(_ preview: SessionPreview, for sessionID: String) {
@@ -604,6 +617,94 @@ extension AppViewModel {
         }
 
         persistProjectWorkspacesEnabledByScope()
+    }
+
+    var currentProjectActions: [OpenCodeAction] {
+        projectActionsByScope[currentProjectPreferenceScopeKey] ?? []
+    }
+
+    var actionEligibleCommands: [OpenCodeCommand] {
+        var seen = Set<String>()
+        return directoryState.commands
+            .filter { command in
+                guard command.source != "client" else { return false }
+                return seen.insert(command.name).inserted
+            }
+            .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+    }
+
+    func actionCommand(for action: OpenCodeAction) -> OpenCodeCommand? {
+        actionEligibleCommands.first { $0.name == action.commandName }
+    }
+
+    func addProjectAction(commandName: String, iconName: String) {
+        let trimmedName = commandName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedName.isEmpty else { return }
+        let trimmedIcon = iconName.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var actions = currentProjectActions.filter { $0.commandName != trimmedName }
+        actions.append(OpenCodeAction(commandName: trimmedName, iconName: trimmedIcon.isEmpty ? "bolt.fill" : trimmedIcon))
+        setProjectActions(actions)
+    }
+
+    func removeProjectAction(_ action: OpenCodeAction) {
+        setProjectActions(currentProjectActions.filter { $0.id != action.id })
+    }
+
+    func updateProjectActionIcon(actionID: UUID, iconName: String) {
+        let trimmedIcon = iconName.trimmingCharacters(in: .whitespacesAndNewlines)
+        var actions = currentProjectActions
+        guard let index = actions.firstIndex(where: { $0.id == actionID }) else { return }
+        actions[index].iconName = trimmedIcon.isEmpty ? "bolt.fill" : trimmedIcon
+        setProjectActions(actions)
+    }
+
+    func moveProjectActions(fromOffsets offsets: IndexSet, toOffset destination: Int) {
+        var actions = currentProjectActions
+        actions.move(fromOffsets: offsets, toOffset: destination)
+        setProjectActions(actions)
+    }
+
+    func isActionRunning(_ action: OpenCodeAction) -> Bool {
+        pendingActionRunsBySessionID.values.contains { $0.actionID == action.id }
+    }
+
+    func actionRunPhase(for action: OpenCodeAction) -> OpenCodeActionRunPhase? {
+        pendingActionRunsBySessionID.values.first { $0.actionID == action.id }?.phase
+    }
+
+    func isActionSession(_ session: OpenCodeSession) -> Bool {
+        pendingActionRunsBySessionID[session.id] != nil || Self.isActionSessionTitle(session.title)
+    }
+
+    static func isActionSessionTitle(_ title: String?) -> Bool {
+        title?.hasPrefix(actionSessionTitlePrefix) == true
+    }
+
+    func hiddenActionSessionTitle(commandName: String, runID: String) -> String {
+        "\(Self.actionSessionTitlePrefix)\(commandName):\(runID)"
+    }
+
+    func actionDebugSessionTitle(commandName: String) -> String {
+        "Debug /\(commandName) action"
+    }
+
+    private func setProjectActions(_ actions: [OpenCodeAction], for scopeKey: String? = nil) {
+        let key = scopeKey ?? currentProjectPreferenceScopeKey
+        var deduplicated: [OpenCodeAction] = []
+        var seen = Set<String>()
+
+        for action in actions where seen.insert(action.commandName).inserted {
+            deduplicated.append(action)
+        }
+
+        if deduplicated.isEmpty {
+            projectActionsByScope[key] = nil
+        } else {
+            projectActionsByScope[key] = deduplicated
+        }
+
+        persistProjectActionsByScope()
     }
 
     func workspaceDirectories(for project: OpenCodeProject? = nil) -> [String] {

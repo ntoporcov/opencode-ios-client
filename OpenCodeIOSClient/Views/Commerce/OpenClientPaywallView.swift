@@ -41,6 +41,11 @@ struct OpenClientPaywallView: View {
                         tint: .purple
                     )
                     PaywallBenefitRow(
+                        title: "Project Actions",
+                        systemImage: "bolt.fill",
+                        tint: .orange
+                    )
+                    PaywallBenefitRow(
                         title: "Supports the open-source app",
                         systemImage: "heart.fill",
                         tint: .pink

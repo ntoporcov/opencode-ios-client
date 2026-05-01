@@ -80,6 +80,42 @@ struct OpenCodeSession: Codable, Identifiable, Hashable, Sendable {
     }
 }
 
+struct OpenCodeAction: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    var commandName: String
+    var iconName: String
+
+    init(id: UUID = UUID(), commandName: String, iconName: String) {
+        self.id = id
+        self.commandName = commandName
+        self.iconName = iconName
+    }
+}
+
+enum OpenCodeActionRunPhase: String, Equatable, Sendable {
+    case runningCommand
+    case checkingResult
+
+    var title: String {
+        switch self {
+        case .runningCommand:
+            return "Running command"
+        case .checkingResult:
+            return "Checking result"
+        }
+    }
+}
+
+struct PendingOpenCodeActionRun: Identifiable, Equatable, Sendable {
+    var id: String { sessionID }
+
+    let sessionID: String
+    let actionID: UUID
+    let commandName: String
+    let runID: String
+    var phase: OpenCodeActionRunPhase
+}
+
 struct OpenCodeProject: Codable, Identifiable, Hashable, Sendable {
     struct Icon: Codable, Hashable {
         let color: String?
