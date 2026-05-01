@@ -314,22 +314,22 @@ extension AppViewModel {
         await sendMessage(text, attachments: attachments, sessionID: selectedSessionID, userVisible: true, meterPrompt: meterPrompt)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, sessionID: String, userVisible: Bool, meterPrompt: Bool = true) async {
-        await sendCommand(command, arguments: "", attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible, meterPrompt: meterPrompt)
+    func sendCommand(_ command: OpenCodeCommand, sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
+        await sendCommand(command, arguments: "", attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, arguments: String, sessionID: String, userVisible: Bool, meterPrompt: Bool = true) async {
-        await sendCommand(command, arguments: arguments, attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible, meterPrompt: meterPrompt)
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
+        await sendCommand(command, arguments: arguments, attachments: draftAttachments, sessionID: sessionID, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], sessionID: String, userVisible: Bool, meterPrompt: Bool = true) async {
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
         guard let session = session(matching: sessionID) else { return }
-        await sendCommand(command, arguments: arguments, attachments: attachments, in: session, userVisible: userVisible, meterPrompt: meterPrompt)
+        await sendCommand(command, arguments: arguments, attachments: attachments, in: session, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
     }
 
-    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], in selectedSession: OpenCodeSession, userVisible: Bool, meterPrompt: Bool = true) async {
+    func sendCommand(_ command: OpenCodeCommand, arguments: String, attachments: [OpenCodeComposerAttachment], in selectedSession: OpenCodeSession, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
         if isCompactClientCommand(command) {
-            await compactSession(selectedSession, userVisible: userVisible, meterPrompt: meterPrompt)
+            await compactSession(selectedSession, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
             return
         }
 
@@ -387,7 +387,7 @@ extension AppViewModel {
             if userVisible {
                 refundReservedUserPromptIfNeeded()
             }
-            if userVisible {
+            if userVisible, restoreDraftOnFailure {
                 draftMessage = draftCommand
                 addDraftAttachments(attachments)
                 persistCurrentMessageDraft(forSessionID: selectedSession.id)
@@ -662,12 +662,12 @@ extension AppViewModel {
         command.name == "compact"
     }
 
-    func compactSession(sessionID: String, userVisible: Bool, meterPrompt: Bool = true) async {
+    func compactSession(sessionID: String, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
         guard let session = session(matching: sessionID) else { return }
-        await compactSession(session, userVisible: userVisible, meterPrompt: meterPrompt)
+        await compactSession(session, userVisible: userVisible, meterPrompt: meterPrompt, restoreDraftOnFailure: restoreDraftOnFailure)
     }
 
-    func compactSession(_ selectedSession: OpenCodeSession, userVisible: Bool, meterPrompt: Bool = true) async {
+    func compactSession(_ selectedSession: OpenCodeSession, userVisible: Bool, meterPrompt: Bool = true, restoreDraftOnFailure: Bool = true) async {
         guard selectedSession.parentID == nil else {
             appendDebugLog("compact blocked child session=\(debugSessionLabel(selectedSession))")
             errorMessage = "Compact is only available in root sessions."
@@ -722,7 +722,7 @@ extension AppViewModel {
             refreshLiveActivityIfNeeded(for: selectedSession.id)
             errorMessage = nil
         } catch {
-            if userVisible {
+            if userVisible, restoreDraftOnFailure {
                 refundReservedUserPromptIfNeeded()
                 draftMessage = "/compact"
                 persistCurrentMessageDraft(forSessionID: selectedSession.id)
