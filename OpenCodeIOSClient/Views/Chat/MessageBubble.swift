@@ -20,6 +20,7 @@ struct MessageBubble: View {
     let onOpenTaskSession: (String) -> Void
     let onForkMessage: (OpenCodeMessageEnvelope) -> Void
     let onInspectDebugMessage: (OpenCodeMessageEnvelope) -> Void
+    let onEntryAnimationStarted: (String) -> Void
 
     @State private var expandedReasoningPartIDs: Set<String> = []
     @State private var expandedContextGroupIDs: Set<String> = []
@@ -217,6 +218,7 @@ struct MessageBubble: View {
         guard animateEntryFromComposer, isUser, !hasRunEntryAnimation else { return }
 
         hasRunEntryAnimation = true
+        onEntryAnimationStarted(effectiveMessage.id)
         var transaction = Transaction()
         transaction.animation = nil
 
