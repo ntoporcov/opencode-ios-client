@@ -277,6 +277,18 @@ final class AppViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.messageDraftsByChatKey[viewModel.messageDraftStorageKey(for: first)]?.text, "saved draft")
     }
 
+    func testClearingDraftRemovesPersistedSlashCommand() {
+        let viewModel = AppViewModel()
+        let session = OpenCodeSession(id: "ses_command", title: "Command", workspaceID: nil, directory: "/tmp/project", projectID: "proj_test", parentID: nil)
+
+        viewModel.directoryState.selectedSession = session
+        viewModel.saveMessageDraft("/test", forSessionID: session.id)
+        viewModel.clearPersistedMessageDraft(forSessionID: session.id)
+
+        XCTAssertFalse(viewModel.hasMessageDraft(for: session))
+        XCTAssertNil(viewModel.messageDraftsByChatKey[viewModel.messageDraftStorageKey(for: session)])
+    }
+
     func testSendDirectoryKeepsExistingSessionScope() {
         let viewModel = AppViewModel()
         let session = OpenCodeSession(

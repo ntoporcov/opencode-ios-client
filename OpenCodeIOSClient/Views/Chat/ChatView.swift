@@ -1891,6 +1891,7 @@ struct ChatView: View {
                 if viewModel.shouldMeterPrompts(for: sessionID) {
                     guard viewModel.reserveUserPromptIfAllowed() else { return }
                 }
+                clearComposerDraft()
                 shouldSnapOnNextMessage = true
                 Task {
                     if viewModel.isCompactClientCommand(command) {
