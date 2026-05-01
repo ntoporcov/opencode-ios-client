@@ -1192,6 +1192,7 @@ struct ChatView: View {
     @State private var preparingOutgoingMessageID: String?
     @State private var animatingOutgoingMessageID: String?
     @State private var readingModeScrollRequest: ReadingModeScrollRequest?
+    @State private var pinnedReadingModeScrollRequestID: UUID?
     @State private var isSendReadingModeActive = false
     @State private var animatedReadingModeBottomSpacerHeight: CGFloat = 0
     @State private var jumpToLatestRequest = 0
@@ -1279,7 +1280,7 @@ struct ChatView: View {
     }
 
     private var shouldAnimateStreamingText: Bool {
-        shouldAutoFollowBottom && !isComposerInputFocused
+        shouldLiveTailStreamingUpdates && !isComposerInputFocused
     }
 
     private var isChildSession: Bool {
@@ -1322,6 +1323,16 @@ struct ChatView: View {
         isScrollGeometryAtBottom || shouldFollowStreamingUpdates
     }
 
+    private var shouldLiveTailStreamingUpdates: Bool {
+        if isSendReadingModeActive {
+            guard hasReadingModeOverflowContent else { return false }
+            if shouldFollowStreamingUpdates { return true }
+            return isScrollGeometryAtBottom && pinnedReadingModeScrollRequestID == readingModeScrollRequest?.id
+        }
+
+        return shouldAutoFollowBottom
+    }
+
     private var chatItemChangeAnimation: Animation? {
         isReadingModeStreamActive ? nil : .snappy(duration: 0.28, extraBounce: 0.02)
     }
@@ -1362,6 +1373,8 @@ struct ChatView: View {
                 Button {
                     viewModel.flushBufferedTranscript(reason: "jump to latest")
                     isSendReadingModeActive = false
+                    readingModeScrollRequest = nil
+                    pinnedReadingModeScrollRequestID = nil
                     jumpToLatestRequest += 1
                 } label: {
                     Image(systemName: "arrow.down")
@@ -1509,7 +1522,7 @@ struct ChatView: View {
                         guard count > oldCount else { return }
 
                         if isSendReadingModeActive, let request = readingModeScrollRequest {
-                            scheduleReadingModeScroll(to: request.messageID, with: proxy)
+                            scheduleInitialReadingModeScrollIfNeeded(request, with: proxy)
                             updateChatContentVisibility()
                             return
                         }
@@ -1524,7 +1537,7 @@ struct ChatView: View {
                         updateChatContentVisibility()
                     }
                     .onChange(of: streamingFollowState) { _, _ in
-                        guard hasLoadedInitialWindow, shouldAutoFollowBottom, !isComposerInputFocused, !isSendReadingModeActive else { return }
+                        guard hasLoadedInitialWindow, shouldLiveTailStreamingUpdates, !isComposerInputFocused else { return }
                         scheduleStreamingScrollToBottom(with: proxy)
                     }
                     .onChange(of: jumpToLatestRequest) { _, _ in
@@ -1992,7 +2005,7 @@ struct ChatView: View {
                 try? await Task.sleep(for: .milliseconds(delayMS))
             }
             guard !Task.isCancelled, canPerformScheduledChatScroll else { return }
-            guard hasLoadedInitialWindow, shouldAutoFollowBottom, !isComposerInputFocused, !isSendReadingModeActive else { return }
+            guard hasLoadedInitialWindow, shouldLiveTailStreamingUpdates, !isComposerInputFocused else { return }
 
             taskStore.lastStreamingAutoScrollAt = Date()
             scrollToBottom(with: proxy, animated: false)
@@ -2015,18 +2028,21 @@ struct ChatView: View {
         taskStore.autoScrollTask?.cancel()
         taskStore.autoScrollTask = Task { @MainActor in
             await Task.yield()
-            try? await Task.sleep(for: .milliseconds(30))
-            guard !Task.isCancelled, isSendReadingModeActive, canPerformScheduledChatScroll else { return }
-            scrollToMessage(messageID, with: proxy, anchor: .top, animated: true)
-
-            try? await Task.sleep(for: .milliseconds(240))
+            try? await Task.sleep(for: .milliseconds(24))
             guard !Task.isCancelled, isSendReadingModeActive, canPerformScheduledChatScroll else { return }
             scrollToMessage(messageID, with: proxy, anchor: .top, animated: true)
         }
     }
 
+    private func scheduleInitialReadingModeScrollIfNeeded(_ request: ReadingModeScrollRequest, with proxy: ScrollViewProxy) {
+        guard pinnedReadingModeScrollRequestID != request.id else { return }
+        pinnedReadingModeScrollRequestID = request.id
+        scheduleReadingModeScroll(to: request.messageID, with: proxy)
+    }
+
     private func scrollToMessage(_ messageID: String, with proxy: ScrollViewProxy, anchor: UnitPoint, animated: Bool) {
         guard displayedChatItems.contains(where: { $0.id == messageID }) else {
+            guard !isSendReadingModeActive else { return }
             scrollToBottom(with: proxy, animated: false)
             return
         }
@@ -2149,6 +2165,7 @@ struct ChatView: View {
 
         isSendReadingModeActive = false
         readingModeScrollRequest = nil
+        pinnedReadingModeScrollRequestID = nil
         taskStore.autoScrollTask?.cancel()
     }
 
@@ -2556,27 +2573,29 @@ struct ChatView: View {
         enterSendReadingMode()
 
         let shouldAnimateBubble = !draftText.isEmpty && !hasAttachments
-        let preparedIDs = viewModel.insertOptimisticUserMessage(draftText, attachments: draftAttachments, in: liveSession, animated: false)
-        preparingOutgoingMessageID = shouldAnimateBubble ? preparedIDs.messageID : nil
-        readingModeScrollRequest = ReadingModeScrollRequest(messageID: preparedIDs.messageID)
-        scheduleThinkingRowReveal(delayMS: shouldAnimateBubble ? 620 : 360)
+        let messageID = OpenCodeIdentifier.message()
+        let partID = OpenCodeIdentifier.part()
+        preparingOutgoingMessageID = shouldAnimateBubble ? messageID : nil
+        readingModeScrollRequest = ReadingModeScrollRequest(messageID: messageID)
 
         let pendingSend = PendingOutgoingSend(
             text: draftText,
             attachments: draftAttachments,
             shouldAnimateBubble: shouldAnimateBubble,
-            messageID: preparedIDs.messageID,
-            partID: preparedIDs.partID
+            messageID: messageID,
+            partID: partID
         )
 
         pendingOutgoingSendTask?.cancel()
         pendingOutgoingSend = pendingSend
         updateReadingModeBottomSpacerHeight(animated: false)
+        viewModel.insertOptimisticUserMessage(draftText, attachments: draftAttachments, in: liveSession, messageID: messageID, partID: partID, animated: false)
+        scheduleThinkingRowReveal(delayMS: shouldAnimateBubble ? 620 : 360)
         clearComposerDraft()
         viewModel.clearDraftAttachments()
 
         if shouldAnimateBubble {
-            scheduleOutgoingEntryAnimation(messageID: preparedIDs.messageID)
+            scheduleOutgoingEntryAnimation(messageID: messageID)
 
             pendingOutgoingSendTask = Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(260))
@@ -2618,6 +2637,10 @@ struct ChatView: View {
     private func enterSendReadingMode() {
         shouldSnapOnNextMessage = false
         shouldDelayNextUserInsertScroll = false
+        shouldFollowStreamingUpdates = false
+        taskStore.streamingAutoScrollTask?.cancel()
+        taskStore.streamingAutoScrollTask = nil
+        pinnedReadingModeScrollRequestID = nil
         isSendReadingModeActive = true
         isComposerInputFocused = false
         viewModel.setComposerStreamingFocus(false)
