@@ -1981,9 +1981,10 @@ struct ChatView: View {
         taskStore.initialBottomSnapTask?.cancel()
         taskStore.initialBottomSnapTask = Task { @MainActor in
             defer { taskStore.initialBottomSnapTask = nil }
-            var didScheduleReveal = false
+            var didSnap = false
+            let snapDelays = revealAfterSnap ? [0, 50, 140] : [0, 50, 160, 320]
 
-            for delayMS in [0, 50, 160, 320] {
+            for delayMS in snapDelays {
                 if delayMS > 0 {
                     try? await Task.sleep(for: .milliseconds(delayMS))
                 } else {
@@ -1995,11 +1996,12 @@ struct ChatView: View {
                 needsInitialBottomSnap = false
                 shouldFollowStreamingUpdates = true
                 scrollToBottom(with: proxy, animated: false)
+                didSnap = true
+            }
 
-                if revealAfterSnap, !didScheduleReveal {
-                    didScheduleReveal = true
-                    scheduleChatContentReveal(delayMS: 90)
-                }
+            if revealAfterSnap {
+                needsInitialBottomSnap = false
+                scheduleChatContentReveal(delayMS: didSnap ? 50 : 0)
             }
         }
     }
