@@ -40,6 +40,11 @@ enum AppleIntelligenceIntent: String, CaseIterable, Sendable {
     }
 }
 
+private enum OpenCodeActionResult {
+    case success
+    case failure
+}
+
 extension AppViewModel {
     func prepareSessionSelection(_ session: OpenCodeSession) {
         let cachedMessages = cachedMessagesBySessionID[session.id] ?? []
@@ -221,6 +226,186 @@ extension AppViewModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func runAction(_ action: OpenCodeAction) async {
+        guard hasProUnlock else {
+            presentPaywall(reason: .actions)
+            return
+        }
+
+        guard !isUsingAppleIntelligence else {
+            errorMessage = "Actions require an OpenCode server connection."
+            return
+        }
+
+        guard !isActionRunning(action) else { return }
+
+        guard actionCommand(for: action) != nil else {
+            errorMessage = "The /\(action.commandName) command is not available in this project."
+            return
+        }
+
+        let runID = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        var actionSession: OpenCodeSession?
+        var didRunCommand = false
+
+        do {
+            let session = try await client.createSession(
+                title: hiddenActionSessionTitle(commandName: action.commandName, runID: runID),
+                directory: effectiveSelectedDirectory
+            )
+            actionSession = session
+            seedComposerSelectionsForNewSession(session)
+            upsertVisibleSession(session)
+            setPendingActionRun(
+                PendingOpenCodeActionRun(
+                    sessionID: session.id,
+                    actionID: action.id,
+                    commandName: action.commandName,
+                    runID: runID,
+                    phase: .runningCommand
+                )
+            )
+
+            let requestDirectory = sendDirectory(for: session)
+            let modelReference = effectiveModelReference(for: session)
+            let agentName = effectiveAgentName(for: session)
+            let variant = selectedVariant(for: session)
+            directoryState.sessionStatuses[session.id] = "busy"
+
+            appendDebugLog("action run command=/\(action.commandName) session=\(debugSessionLabel(session)) run=\(runID)")
+            try await client.sendCommand(
+                sessionID: session.id,
+                command: action.commandName,
+                arguments: "",
+                directory: requestDirectory,
+                model: modelReference,
+                agent: agentName,
+                variant: variant
+            )
+            didRunCommand = true
+
+            updatePendingActionRunPhase(sessionID: session.id, phase: .checkingResult)
+            directoryState.sessionStatuses[session.id] = "busy"
+
+            let response = try await client.sendMessage(
+                sessionID: session.id,
+                text: actionResultPrompt(commandName: action.commandName, runID: runID),
+                directory: requestDirectory,
+                model: modelReference,
+                agent: agentName,
+                variant: variant
+            )
+            directoryState.sessionStatuses[session.id] = "idle"
+
+            let result = actionResult(from: [response], runID: runID)
+            clearPendingActionRun(sessionID: session.id)
+
+            switch result {
+            case .success?:
+                appendDebugLog("action success command=/\(action.commandName) session=\(debugSessionLabel(session))")
+                try await client.deleteSession(sessionID: session.id)
+                removeActionSessionFromLocalState(sessionID: session.id)
+            case .failure?, nil:
+                let resultLabel = result.map { _ in "failure" } ?? "missing"
+                appendDebugLog("action failure command=/\(action.commandName) session=\(debugSessionLabel(session)) result=\(resultLabel)")
+                try await revealActionSession(session, commandName: action.commandName)
+            }
+
+            errorMessage = nil
+        } catch {
+            if let session = actionSession {
+                clearPendingActionRun(sessionID: session.id)
+                if didRunCommand {
+                    try? await revealActionSession(session, commandName: action.commandName)
+                } else {
+                    try? await client.deleteSession(sessionID: session.id)
+                    removeActionSessionFromLocalState(sessionID: session.id)
+                }
+            }
+            appendDebugLog("action error command=/\(action.commandName) error=\(error.localizedDescription)")
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func setPendingActionRun(_ run: PendingOpenCodeActionRun) {
+        withAnimation(opencodeSelectionAnimation) {
+            pendingActionRunsBySessionID[run.sessionID] = run
+        }
+    }
+
+    private func updatePendingActionRunPhase(sessionID: String, phase: OpenCodeActionRunPhase) {
+        guard var run = pendingActionRunsBySessionID[sessionID] else { return }
+        run.phase = phase
+        withAnimation(opencodeSelectionAnimation) {
+            pendingActionRunsBySessionID[sessionID] = run
+        }
+    }
+
+    private func clearPendingActionRun(sessionID: String) {
+        withAnimation(opencodeSelectionAnimation) {
+            pendingActionRunsBySessionID[sessionID] = nil
+        }
+    }
+
+    private func revealActionSession(_ session: OpenCodeSession, commandName: String) async throws {
+        let updatedSession = try await client.updateSessionTitle(
+            sessionID: session.id,
+            title: actionDebugSessionTitle(commandName: commandName)
+        )
+        upsertVisibleSession(updatedSession)
+        try? await reloadSessions()
+    }
+
+    private func removeActionSessionFromLocalState(sessionID: String) {
+        withAnimation(opencodeSelectionAnimation) {
+            directoryState.sessions.removeAll { $0.id == sessionID }
+            directoryState.sessionStatuses[sessionID] = nil
+            cachedMessagesBySessionID[sessionID] = nil
+
+            for (directory, var state) in workspaceSessionsByDirectory {
+                let previousCount = state.sessions.count
+                state.sessions.removeAll { $0.id == sessionID }
+                if state.sessions.count != previousCount {
+                    state.sessionTotal = max(0, state.sessionTotal - 1)
+                }
+                workspaceSessionsByDirectory[directory] = state
+            }
+        }
+        removeSessionPreview(for: sessionID)
+        clearPersistedMessageDraft(forSessionID: sessionID)
+    }
+
+    private func actionResultPrompt(commandName: String, runID: String) -> String {
+        """
+        Evaluate the just-completed /\(commandName) action in this session.
+
+        Reply with exactly one line and no other text:
+        OPENCLIENT_ACTION_RESULT:\(runID):SUCCESS
+        or
+        OPENCLIENT_ACTION_RESULT:\(runID):FAILURE
+
+        Use SUCCESS only if the action completed successfully and no user debugging is needed.
+        Use FAILURE if anything failed, is ambiguous, or requires user attention.
+        """
+    }
+
+    private func actionResult(from messages: [OpenCodeMessageEnvelope], runID: String) -> OpenCodeActionResult? {
+        let text = messages
+            .flatMap(\.parts)
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .uppercased()
+        let markerPrefix = "OPENCLIENT_ACTION_RESULT:\(runID.uppercased()):"
+
+        if text.contains(markerPrefix + "FAILURE") {
+            return .failure
+        }
+        if text.contains(markerPrefix + "SUCCESS") {
+            return .success
+        }
+        return nil
     }
 
     private func resolveNewSessionDirectory() async throws -> String? {

@@ -47,6 +47,7 @@ final class AppViewModel: ObservableObject {
         static let pinnedSessionsByScope = "pinnedSessionsByScope"
         static let liveActivityAutoStartByScope = "liveActivityAutoStartByScope"
         static let projectWorkspacesEnabledByScope = "projectWorkspacesEnabledByScope"
+        static let projectActionsByScope = "projectActionsByScope"
         static let messageDraftsByChat = "messageDraftsByChat"
         static let chatBreadcrumbs = "chatBreadcrumbs"
     }
@@ -76,6 +77,8 @@ final class AppViewModel: ObservableObject {
     @Published var pinnedSessionIDsByScope: [String: [String]] = [:]
     @Published var liveActivityAutoStartByScope: [String: Bool] = [:]
     @Published var projectWorkspacesEnabledByScope: [String: Bool] = [:]
+    @Published var projectActionsByScope: [String: [OpenCodeAction]] = [:]
+    @Published var pendingActionRunsBySessionID: [String: PendingOpenCodeActionRun] = [:]
     @Published var workspaceSessionsByDirectory: [String: OpenCodeWorkspaceSessionState] = [:]
     @Published var draftTitle = ""
     @Published var newSessionWorkspaceSelection: NewSessionWorkspaceSelection = .main
@@ -165,6 +168,7 @@ final class AppViewModel: ObservableObject {
 
     let debugProbePrompt = "Write four short paragraphs about why responsive streaming matters in mobile AI apps. Make each paragraph 2-3 sentences."
     let defaultSearchRoot = NSHomeDirectory()
+    static let actionSessionTitlePrefix = "__openclient_action__:"
 
     init() {
         if configureUITestEnvironmentIfNeeded() {
@@ -186,6 +190,7 @@ final class AppViewModel: ObservableObject {
         pinnedSessionIDsByScope = loadPinnedSessionIDsByScope()
         liveActivityAutoStartByScope = loadLiveActivityAutoStartByScope()
         projectWorkspacesEnabledByScope = loadProjectWorkspacesEnabledByScope()
+        projectActionsByScope = loadProjectActionsByScope()
         messageDraftsByChatKey = loadMessageDraftsByChatKey()
         chatBreadcrumbs = loadChatBreadcrumbs()
         recentServerConfigs = recentConfigs
@@ -217,7 +222,7 @@ final class AppViewModel: ObservableObject {
         return appleIntelligenceRecentWorkspaces.first { $0.id == activeAppleIntelligenceWorkspaceID }
     }
 
-    var sessions: [OpenCodeSession] { directoryState.sessions.filter(\.isRootSession) }
+    var sessions: [OpenCodeSession] { directoryState.sessions.filter { $0.isRootSession && !isActionSession($0) } }
 
     var isProjectWorkspacesEnabled: Bool {
         projectWorkspacesEnabledByScope[currentProjectPreferenceScopeKey] ?? false
