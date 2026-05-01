@@ -306,6 +306,7 @@ final class AppViewModelTests: XCTestCase {
             worktree: "/tmp/selected-dir",
             vcs: "git",
             name: "selected-dir",
+            sandboxes: nil,
             icon: nil,
             time: nil
         )
@@ -330,6 +331,7 @@ final class AppViewModelTests: XCTestCase {
             worktree: "Global",
             vcs: nil,
             name: nil,
+            sandboxes: nil,
             icon: nil,
             time: nil
         )
@@ -355,6 +357,7 @@ final class AppViewModelTests: XCTestCase {
             worktree: "Global",
             vcs: nil,
             name: nil,
+            sandboxes: nil,
             icon: nil,
             time: nil
         )
@@ -416,6 +419,7 @@ final class AppViewModelTests: XCTestCase {
             worktree: "/tmp/project",
             vcs: "git",
             name: "project",
+            sandboxes: nil,
             icon: nil,
             time: nil
         )
@@ -475,6 +479,7 @@ final class AppViewModelTests: XCTestCase {
             worktree: "/tmp/project",
             vcs: "git",
             name: "project",
+            sandboxes: nil,
             icon: nil,
             time: nil
         )
