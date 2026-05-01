@@ -1066,6 +1066,7 @@ private struct MessageBubbleSnapshot: Equatable {
     let animatesStreamingText: Bool
     let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
+    let entrySourceFrame: CGRect?
 }
 
 private struct EquatableMessageBubbleHost: View, Equatable {
@@ -1089,6 +1090,7 @@ private struct EquatableMessageBubbleHost: View, Equatable {
             animatesStreamingText: snapshot.animatesStreamingText,
             reserveEntryFromComposer: snapshot.reserveEntryFromComposer,
             animateEntryFromComposer: snapshot.animateEntryFromComposer,
+            entrySourceFrame: snapshot.entrySourceFrame,
             resolveTaskSessionID: resolveTaskSessionID,
             onSelectPart: onSelectPart,
             onOpenTaskSession: onOpenTaskSession,
@@ -1209,6 +1211,8 @@ struct ChatView: View {
     @State private var isThinkingRowRevealAllowed = true
     @State private var preparingOutgoingMessageID: String?
     @State private var animatingOutgoingMessageID: String?
+    @State private var outgoingEntrySourceFrame: CGRect?
+    @State private var composerInputFrame: CGRect = .zero
     @State private var jumpToLatestRequest = 0
     @State private var bottomAnchorFrame: CGRect = .zero
     @State private var needsInitialBottomSnap = true
@@ -1338,11 +1342,15 @@ struct ChatView: View {
     }
 
     private var chatItemChangeAnimation: Animation? {
-        isChatStreamActive ? nil : .snappy(duration: 0.28, extraBounce: 0.02)
+        isSendChoreographyActive ? sendChoreographyAnimation : (isSessionBusy ? nil : .snappy(duration: 0.28, extraBounce: 0.02))
     }
 
-    private var isChatStreamActive: Bool {
-        pendingOutgoingSend != nil || isSessionBusy || preparingOutgoingMessageID != nil || animatingOutgoingMessageID != nil
+    private var isSendChoreographyActive: Bool {
+        pendingOutgoingSend != nil || preparingOutgoingMessageID != nil || animatingOutgoingMessageID != nil
+    }
+
+    private var sendChoreographyAnimation: Animation {
+        .spring(response: 0.42, dampingFraction: 0.86)
     }
 
     private var jumpToLatestButton: some View {
@@ -1391,7 +1399,7 @@ struct ChatView: View {
             GeometryReader { geometry in
                 ScrollViewReader { proxy in
                     let chatItems = displayedChatItems
-                    let chatItemIDs = chatItems.map(\.id)
+                    let chatItemIDs = chatItems.map(\.id) + (shouldShowThinking ? [ChatScrollTarget.thinkingRow] : [])
 
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -1494,15 +1502,21 @@ struct ChatView: View {
                         guard count > oldCount else { return }
 
                         if shouldSnapOnNextMessage || shouldAutoFollowBottom {
+                            let shouldAnimateScroll = shouldSnapOnNextMessage
                             shouldSnapOnNextMessage = false
                             let delay = shouldDelayNextUserInsertScroll ? 180 : 10
                             shouldDelayNextUserInsertScroll = false
-                            scheduleScrollToBottom(with: proxy, delayMS: delay)
+                            scheduleScrollToBottom(with: proxy, delayMS: delay, animated: shouldAnimateScroll)
                         }
 
                         updateChatContentVisibility()
                     }
-                    .onChange(of: streamingFollowState) { _, _ in
+                    .onChange(of: streamingFollowState) { oldState, newState in
+                        if newState.showsThinking, !oldState.showsThinking, pendingOutgoingSend != nil {
+                            scheduleScrollToBottom(with: proxy, delayMS: 20, animated: true)
+                            return
+                        }
+
                         guard hasLoadedInitialWindow, shouldLiveTailStreamingUpdates else { return }
                         scheduleStreamingScrollToBottom(with: proxy)
                     }
@@ -1792,7 +1806,9 @@ struct ChatView: View {
             togglingMCPServerNames: viewModel.directoryState.togglingMCPServerNames,
             mcpErrorMessage: viewModel.directoryState.mcpErrorMessage,
             actionSignature: snapshot.actionSignature,
-            onInputFrameChange: { _ in },
+            onInputFrameChange: { frame in
+                composerInputFrame = frame
+            },
             onFocusChange: { isFocused in
                 isComposerInputFocused = isFocused
                 viewModel.setComposerStreamingFocus(isFocused)
@@ -2030,7 +2046,7 @@ struct ChatView: View {
 
     private func performChatScroll(animated: Bool, _ operation: @escaping () -> Void) {
         if animated {
-            withAnimation(.snappy(duration: 0.26, extraBounce: 0.02), operation)
+            withAnimation(sendChoreographyAnimation, operation)
         } else {
             withoutListScrollAnimation(operation)
         }
@@ -2308,7 +2324,8 @@ struct ChatView: View {
             isStreamingMessage: isStreamingMessage(message),
             animatesStreamingText: shouldAnimateStreamingText,
             reserveEntryFromComposer: message.id == preparingOutgoingMessageID,
-            animateEntryFromComposer: message.id == animatingOutgoingMessageID
+            animateEntryFromComposer: message.id == animatingOutgoingMessageID,
+            entrySourceFrame: outgoingEntrySourceFrame(for: message)
         )
 
         return EquatableMessageBubbleHost(
@@ -2331,7 +2348,17 @@ struct ChatView: View {
         .padding(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
     }
 
+    private func outgoingEntrySourceFrame(for message: OpenCodeMessageEnvelope) -> CGRect? {
+        guard message.id == preparingOutgoingMessageID || message.id == animatingOutgoingMessageID else { return nil }
+        guard let frame = outgoingEntrySourceFrame, frame.width > 1, frame.height > 1 else { return nil }
+        return frame
+    }
+
     private func messageRowTransition(for message: OpenCodeMessageEnvelope) -> AnyTransition {
+        if message.id == preparingOutgoingMessageID || message.id == animatingOutgoingMessageID {
+            return .identity
+        }
+
         if isStreamingMessage(message) {
             return .identity
         }
@@ -2540,6 +2567,7 @@ struct ChatView: View {
         let messageID = OpenCodeIdentifier.message()
         let partID = OpenCodeIdentifier.part()
         preparingOutgoingMessageID = shouldAnimateBubble ? messageID : nil
+        outgoingEntrySourceFrame = shouldAnimateBubble ? composerInputFrame : nil
 
         let pendingSend = PendingOutgoingSend(
             text: draftText,
@@ -2551,8 +2579,10 @@ struct ChatView: View {
 
         pendingOutgoingSendTask?.cancel()
         pendingOutgoingSend = pendingSend
-        viewModel.insertOptimisticUserMessage(draftText, attachments: draftAttachments, in: liveSession, messageID: messageID, partID: partID, animated: false)
-        scheduleThinkingRowReveal(delayMS: shouldAnimateBubble ? 620 : 360)
+        withAnimation(sendChoreographyAnimation) {
+            _ = viewModel.insertOptimisticUserMessage(draftText, attachments: draftAttachments, in: liveSession, messageID: messageID, partID: partID, animated: false)
+        }
+        scheduleThinkingRowReveal(delayMS: shouldAnimateBubble ? 260 : 180)
         clearComposerDraft()
         viewModel.clearDraftAttachments()
 
@@ -2601,16 +2631,17 @@ struct ChatView: View {
         animatingOutgoingMessageID = nil
 
         outgoingEntryResetTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(340))
+            try? await Task.sleep(for: .milliseconds(48))
             guard !Task.isCancelled else { return }
             animatingOutgoingMessageID = messageID
 
-            try? await Task.sleep(for: .milliseconds(620))
+            try? await Task.sleep(for: .milliseconds(560))
             guard !Task.isCancelled else { return }
             animatingOutgoingMessageID = nil
             if preparingOutgoingMessageID == messageID {
                 preparingOutgoingMessageID = nil
             }
+            outgoingEntrySourceFrame = nil
         }
     }
 
@@ -2641,6 +2672,7 @@ struct ChatView: View {
                 isThinkingRowRevealAllowed = true
                 preparingOutgoingMessageID = nil
                 animatingOutgoingMessageID = nil
+                outgoingEntrySourceFrame = nil
             }
             restoreComposerDraft(pendingSend.text)
             viewModel.addDraftAttachments(pendingSend.attachments)

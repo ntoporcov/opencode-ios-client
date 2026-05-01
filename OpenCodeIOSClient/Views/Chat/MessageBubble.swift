@@ -14,6 +14,7 @@ struct MessageBubble: View {
     let animatesStreamingText: Bool
     let reserveEntryFromComposer: Bool
     let animateEntryFromComposer: Bool
+    let entrySourceFrame: CGRect?
     let resolveTaskSessionID: (OpenCodePart, String) -> String?
     let onSelectPart: (OpenCodePart) -> Void
     let onOpenTaskSession: (String) -> Void
@@ -27,6 +28,7 @@ struct MessageBubble: View {
     @State private var entryScale: CGFloat = 1
     @State private var hasRunEntryAnimation = false
     @State private var entryAnimationTask: Task<Void, Never>?
+    @State private var contentFrame: CGRect = .zero
     @State private var displayEntryCache = MessageBubbleDisplayEntryCache()
 
     private var effectiveMessage: OpenCodeMessageEnvelope {
@@ -59,7 +61,18 @@ struct MessageBubble: View {
     }
 
     private var entryStartOffset: CGSize {
-        CGSize(width: 0, height: 900)
+        guard let entrySourceFrame,
+              entrySourceFrame.width > 1,
+              entrySourceFrame.height > 1,
+              contentFrame.width > 1,
+              contentFrame.height > 1 else {
+            return CGSize(width: 0, height: 140)
+        }
+
+        return CGSize(
+            width: entrySourceFrame.maxX - contentFrame.maxX,
+            height: entrySourceFrame.midY - contentFrame.midY
+        )
     }
 
     var body: some View {
@@ -68,7 +81,7 @@ struct MessageBubble: View {
                 Spacer(minLength: 44)
             }
 
-            messageContent
+            measuredMessageContent
 
             if !isUser {
                 Spacer(minLength: 0)
@@ -78,9 +91,17 @@ struct MessageBubble: View {
         .offset(entryOffset)
         .opacity(entryOpacity)
         .scaleEffect(entryScale, anchor: .bottomTrailing)
+        .onPreferenceChange(MessageBubbleContentFramePreferenceKey.self) { frame in
+            guard frame != .zero, contentFrame != frame else { return }
+            contentFrame = frame
+            prepareEntryAnimationIfNeeded()
+        }
         .onAppear {
             prepareEntryAnimationIfNeeded()
             runEntryAnimationIfNeeded()
+        }
+        .onChange(of: entrySourceFrame) { _, _ in
+            prepareEntryAnimationIfNeeded()
         }
         .onChange(of: reserveEntryFromComposer) { _, _ in
             prepareEntryAnimationIfNeeded()
@@ -92,6 +113,16 @@ struct MessageBubble: View {
             entryAnimationTask?.cancel()
             entryAnimationTask = nil
         }
+    }
+
+    private var measuredMessageContent: some View {
+        messageContent
+            .background {
+                GeometryReader { geometry in
+                    Color.clear
+                        .preference(key: MessageBubbleContentFramePreferenceKey.self, value: geometry.frame(in: .named("chat-view-space")))
+                }
+            }
     }
 
     private var messageContent: some View {
@@ -191,15 +222,15 @@ struct MessageBubble: View {
 
         withTransaction(transaction) {
             entryOffset = entryStartOffset
-            entryOpacity = 0.94
-            entryScale = 0.985
+            entryOpacity = 1
+            entryScale = 0.98
         }
 
         entryAnimationTask?.cancel()
         entryAnimationTask = Task { @MainActor in
             await Task.yield()
             guard !Task.isCancelled else { return }
-            withAnimation(.spring(response: 0.48, dampingFraction: 0.84)) {
+            withAnimation(.spring(response: 0.44, dampingFraction: 0.84)) {
                 entryOffset = .zero
                 entryOpacity = 1
                 entryScale = 1
@@ -216,8 +247,8 @@ struct MessageBubble: View {
 
         withTransaction(transaction) {
             entryOffset = entryStartOffset
-            entryOpacity = 0.001
-            entryScale = 0.985
+            entryOpacity = 1
+            entryScale = 0.98
         }
     }
 
@@ -792,6 +823,17 @@ struct MessageBubble: View {
 }
 
 private let contextGroupTools: Set<String> = ["read", "glob", "grep", "list"]
+
+private struct MessageBubbleContentFramePreferenceKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if next != .zero {
+            value = next
+        }
+    }
+}
 
 private struct IndexedPart: Identifiable {
     let index: Int
