@@ -1076,6 +1076,7 @@ private struct EquatableMessageBubbleHost: View, Equatable {
     let onOpenTaskSession: (String) -> Void
     let onForkMessage: (OpenCodeMessageEnvelope) -> Void
     let onInspectDebugMessage: (OpenCodeMessageEnvelope) -> Void
+    let onEntryAnimationStarted: (String) -> Void
 
     nonisolated static func == (lhs: EquatableMessageBubbleHost, rhs: EquatableMessageBubbleHost) -> Bool {
         lhs.snapshot == rhs.snapshot
@@ -1095,7 +1096,8 @@ private struct EquatableMessageBubbleHost: View, Equatable {
             onSelectPart: onSelectPart,
             onOpenTaskSession: onOpenTaskSession,
             onForkMessage: onForkMessage,
-            onInspectDebugMessage: onInspectDebugMessage
+            onInspectDebugMessage: onInspectDebugMessage,
+            onEntryAnimationStarted: onEntryAnimationStarted
         )
     }
 }
@@ -1110,6 +1112,39 @@ private struct StreamingFollowState: Equatable {
 private struct AccessoryPresenceState: Equatable {
     let attachmentIDs: [String]
     let incompleteTodoIDs: [String]
+}
+
+private struct ChatMountTimelineModifier: ViewModifier {
+    let startDate: Date?
+
+    private let duration: TimeInterval = 0.22
+    private let initialOffset: CGFloat = 10
+
+    func body(content: Content) -> some View {
+        if let startDate {
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+                let progress = progress(at: timeline.date, startDate: startDate)
+
+                content
+                    .opacity(progress)
+                    .offset(y: initialOffset * (1 - progress))
+            }
+        } else {
+            content
+        }
+    }
+
+    private func progress(at date: Date, startDate: Date) -> Double {
+        let elapsed = max(0, date.timeIntervalSince(startDate))
+        let linear = min(1, elapsed / duration)
+        return linear * linear * (3 - 2 * linear)
+    }
+}
+
+private extension View {
+    func chatMountTimeline(startDate: Date?) -> some View {
+        modifier(ChatMountTimelineModifier(startDate: startDate))
+    }
 }
 
 private struct EquatableMessageComposerHost: View, Equatable {
@@ -1190,8 +1225,6 @@ struct ChatView: View {
     @State private var selectedCompactionSummary: CompactionSummaryPayload?
     @State private var selectedActivityDetail: ActivityDetail?
     @State private var showingTodoInspector = false
-    @State private var visibleMessageCount = 80
-    @State private var hasLoadedInitialWindow = false
     @State private var questionAnswers: [String: Set<String>] = [:]
     @State private var questionCustomAnswers: [String: String] = [:]
     @State private var taskStore = ChatViewTaskStore()
@@ -1211,24 +1244,22 @@ struct ChatView: View {
     @State private var isThinkingRowRevealAllowed = true
     @State private var preparingOutgoingMessageID: String?
     @State private var animatingOutgoingMessageID: String?
+    @State private var outgoingEntryAnimationStartedMessageIDs: Set<String> = []
     @State private var outgoingEntrySourceFrame: CGRect?
     @State private var composerInputFrame: CGRect = .zero
     @State private var jumpToLatestRequest = 0
     @State private var bottomAnchorFrame: CGRect = .zero
     @State private var needsInitialBottomSnap = true
     @State private var hasCompletedInitialHydrationSnap = false
+    @State private var chatMountAnimationStartDate: Date?
     @State private var composerOverlayHeight: CGFloat = 0
     @State private var shouldFollowComposerAffordanceChange = false
     @State private var affordanceScrollTask: Task<Void, Never>?
     @State private var needsInitialComposerHeightSnap = true
-    @State private var contentRevealTask: Task<Void, Never>?
-    @State private var isChatContentVisible = false
-    @State private var isWaitingForInitialChatReveal = false
-    @State private var loadingIndicatorTask: Task<Void, Never>?
-    @State private var shouldShowLoadingIndicator = false
-    @State private var chatContentOffsetY: CGFloat = 14
     @State private var isScrollGeometryAtBottom = true
     @State private var shouldFollowStreamingUpdates = true
+    @State private var isUserDraggingChatScroll = false
+    @State private var hasUserInterruptedStreamingFollow = false
     @State private var isRefreshingChatData = false
     @State private var bottomPullDistance: CGFloat = 0
     @State private var bottomPullStartedAtBottom = false
@@ -1239,7 +1270,6 @@ struct ChatView: View {
 
     @State private var selectedInstructionTab: AppleIntelligenceInstructionTab = .user
 
-    private let messageWindowSize = 10
     private let streamingAutoScrollMinimumInterval: TimeInterval = 0.12
     private let bottomRefreshThreshold: CGFloat = 72
     private let bottomRefreshIndicatorHeight: CGFloat = 34
@@ -1317,24 +1347,12 @@ struct ChatView: View {
         viewModel.parentSessionTitle(for: liveSession)
     }
 
-    private var isLoadingSelectedSession: Bool {
-        viewModel.selectedSession?.id == sessionID && viewModel.directoryState.isLoadingSelectedSession && viewModel.messages.isEmpty
-    }
-
-    private var shouldAnimateInitialChatReveal: Bool {
-        viewModel.messages.isEmpty
-    }
-
-    private var shouldShowChatLoadingOverlay: Bool {
-        isLoadingSelectedSession || !isChatContentVisible
-    }
-
     private var shouldShowJumpToLatestButton: Bool {
-        return hasLoadedInitialWindow && !isScrollGeometryAtBottom && !shouldFollowStreamingUpdates && !shouldShowChatLoadingOverlay
+        return !isScrollGeometryAtBottom && !shouldFollowStreamingUpdates
     }
 
     private var shouldAutoFollowBottom: Bool {
-        isScrollGeometryAtBottom || shouldFollowStreamingUpdates
+        !hasUserInterruptedStreamingFollow && (isScrollGeometryAtBottom || shouldFollowStreamingUpdates)
     }
 
     private var shouldLiveTailStreamingUpdates: Bool {
@@ -1379,18 +1397,6 @@ struct ChatView: View {
         .animation(.easeOut(duration: 0.16), value: shouldShowJumpToLatestButton)
     }
 
-    private var chatLoadingOverlay: some View {
-        VStack {
-            if shouldShowLoadingIndicator {
-                ProgressView()
-                    .controlSize(.regular)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-        .background(OpenCodePlatformColor.groupedBackground)
-        .allowsHitTesting(false)
-    }
-
     var body: some View {
         ZStack {
             OpenCodePlatformColor.groupedBackground
@@ -1403,22 +1409,6 @@ struct ChatView: View {
 
                     ScrollView {
                         LazyVStack(spacing: 0) {
-                            if hiddenMessageCount > 0 {
-                                Button {
-                                    visibleMessageCount = min(viewModel.messages.count, visibleMessageCount + messageWindowSize)
-                                } label: {
-                                    Text("View older messages (\(hiddenMessageCount))")
-                                        .font(.subheadline.weight(.medium))
-                                        .foregroundStyle(.blue)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
-                                        .background(OpenCodePlatformColor.secondaryGroupedBackground, in: Capsule())
-                                }
-                                .buttonStyle(.plain)
-                                .id(ChatScrollTarget.olderMessagesButton)
-                                .padding(EdgeInsets(top: 12, leading: 16, bottom: 4, trailing: 16))
-                            }
-
                             ForEach(chatItems) { item in
                                 chatRow(for: item)
                             }
@@ -1436,34 +1426,18 @@ struct ChatView: View {
                     .opencodeInteractiveKeyboardDismiss()
                     .background(OpenCodePlatformColor.groupedBackground)
                     .accessibilityIdentifier("chat.scroll")
-                    .opacity(isChatContentVisible ? 1 : 0)
-                    .offset(y: chatContentOffsetY)
-                    .overlay {
-                        if shouldShowChatLoadingOverlay {
-                            chatLoadingOverlay
-                        }
-                    }
-                    .animation(.easeOut(duration: 0.18), value: isChatContentVisible)
-                    .animation(.easeOut(duration: 0.18), value: chatContentOffsetY)
+                    .chatMountTimeline(startDate: chatMountAnimationStartDate)
                     .onAppear {
                         viewModel.activeChatSessionID = sessionID
                         needsInitialBottomSnap = true
                         needsInitialComposerHeightSnap = true
                         hasCompletedInitialHydrationSnap = !viewModel.messages.isEmpty
-                        isWaitingForInitialChatReveal = viewModel.messages.isEmpty
-                        isChatContentVisible = !isWaitingForInitialChatReveal
-                        chatContentOffsetY = isWaitingForInitialChatReveal ? 10 : 0
-                        shouldShowLoadingIndicator = false
-                        if !hasLoadedInitialWindow {
-                            visibleMessageCount = messageWindowSize
-                            hasLoadedInitialWindow = true
-                        }
-                        updateChatContentVisibility()
+                        chatMountAnimationStartDate = nil
                         scheduleInitialBottomSnap(with: proxy)
                     }
                     .onChange(of: bottomAnchorFrame) { _, frame in
                         guard needsInitialBottomSnap, frame != .zero else { return }
-                        scheduleInitialBottomSnap(with: proxy, revealAfterSnap: isWaitingForInitialChatReveal)
+                        scheduleInitialBottomSnap(with: proxy)
                     }
                     .onChange(of: geometry.size.height) { _, _ in
                         guard shouldAutoFollowBottom else { return }
@@ -1473,7 +1447,7 @@ struct ChatView: View {
                         guard newHeight > 0, abs(newHeight - oldHeight) > 1 else { return }
                         if needsInitialComposerHeightSnap, !viewModel.messages.isEmpty {
                             needsInitialComposerHeightSnap = false
-                            scheduleInitialBottomSnap(with: proxy, revealAfterSnap: isWaitingForInitialChatReveal)
+                            scheduleInitialBottomSnap(with: proxy)
                             return
                         }
                         guard shouldFollowComposerAffordanceChange || shouldAutoFollowBottom else { return }
@@ -1481,22 +1455,17 @@ struct ChatView: View {
                         scheduleComposerAffordanceFollow(with: proxy, delayMS: 20)
                     }
                     .onChange(of: viewModel.messages.count) { oldCount, count in
-                        if !hasLoadedInitialWindow {
-                            visibleMessageCount = messageWindowSize
-                            return
-                        }
-
-                        visibleMessageCount = min(count, max(visibleMessageCount, messageWindowSize))
                         if count == 0 {
-                            visibleMessageCount = messageWindowSize
+                            chatMountAnimationStartDate = nil
                         }
 
                         if count > 0, !hasCompletedInitialHydrationSnap {
                             hasCompletedInitialHydrationSnap = true
                             needsInitialBottomSnap = true
-                            isWaitingForInitialChatReveal = true
-                            setChatContentHiddenForInitialReveal()
-                            scheduleInitialBottomSnap(with: proxy, revealAfterSnap: true)
+                            scheduleInitialBottomSnap(with: proxy)
+                            if oldCount == 0, pendingOutgoingSend == nil {
+                                chatMountAnimationStartDate = Date().addingTimeInterval(0.04)
+                            }
                         }
 
                         guard count > oldCount else { return }
@@ -1508,8 +1477,6 @@ struct ChatView: View {
                             shouldDelayNextUserInsertScroll = false
                             scheduleScrollToBottom(with: proxy, delayMS: delay, animated: shouldAnimateScroll)
                         }
-
-                        updateChatContentVisibility()
                     }
                     .onChange(of: streamingFollowState) { oldState, newState in
                         if newState.showsThinking, !oldState.showsThinking, pendingOutgoingSend != nil {
@@ -1517,17 +1484,15 @@ struct ChatView: View {
                             return
                         }
 
-                        guard hasLoadedInitialWindow, shouldLiveTailStreamingUpdates else { return }
+                        guard shouldLiveTailStreamingUpdates else { return }
                         scheduleStreamingScrollToBottom(with: proxy)
                     }
                     .onChange(of: jumpToLatestRequest) { _, _ in
                         scrollToBottom(with: proxy, animated: true)
                     }
-                    .onChange(of: isLoadingSelectedSession) { _, _ in
-                        updateChatContentVisibility()
-                    }
                     .onChange(of: isScrollGeometryAtBottom) { _, isAtBottom in
-                        if isAtBottom {
+                        if isAtBottom, !isUserDraggingChatScroll {
+                            hasUserInterruptedStreamingFollow = false
                             shouldFollowStreamingUpdates = true
                         }
                     }
@@ -1535,12 +1500,6 @@ struct ChatView: View {
                         guard frame != .zero, bottomAnchorFrame != frame else { return }
                         bottomAnchorFrame = frame
                     }
-#if canImport(UIKit)
-                    .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
-                        guard keyboardWillShow(from: notification), isScrollGeometryAtBottom else { return }
-                        scheduleComposerAffordanceFollow(with: proxy, delayMS: 20)
-                    }
-#endif
                 }
             }
 
@@ -1566,8 +1525,6 @@ struct ChatView: View {
             taskStore.initialBottomSnapTask?.cancel()
             taskStore.composerDraftPersistenceTask?.cancel()
             affordanceScrollTask?.cancel()
-            contentRevealTask?.cancel()
-            loadingIndicatorTask?.cancel()
             pendingOutgoingSendTask?.cancel()
             outgoingEntryResetTask?.cancel()
             thinkingRowRevealTask?.cancel()
@@ -1836,9 +1793,9 @@ struct ChatView: View {
                 shouldSnapOnNextMessage = true
                 Task {
                     if viewModel.isCompactClientCommand(command) {
-                        await viewModel.compactSession(sessionID: sessionID, userVisible: true, meterPrompt: false)
+                        await viewModel.compactSession(sessionID: sessionID, userVisible: true, meterPrompt: false, restoreDraftOnFailure: false)
                     } else {
-                        await viewModel.sendCommand(command, sessionID: sessionID, userVisible: true, meterPrompt: false)
+                        await viewModel.sendCommand(command, sessionID: sessionID, userVisible: true, meterPrompt: false, restoreDraftOnFailure: false)
                     }
                 }
             },
@@ -1977,14 +1934,12 @@ struct ChatView: View {
         scheduleScrollToBottom(with: proxy, delayMS: delayMS, animated: false)
     }
 
-    private func scheduleInitialBottomSnap(with proxy: ScrollViewProxy, revealAfterSnap: Bool = false) {
+    private func scheduleInitialBottomSnap(with proxy: ScrollViewProxy) {
         taskStore.initialBottomSnapTask?.cancel()
         taskStore.initialBottomSnapTask = Task { @MainActor in
             defer { taskStore.initialBottomSnapTask = nil }
-            var didSnap = false
-            let snapDelays = revealAfterSnap ? [0, 50, 140] : [0, 50, 160, 320]
 
-            for delayMS in snapDelays {
+            for delayMS in [0, 50, 160, 320] {
                 if delayMS > 0 {
                     try? await Task.sleep(for: .milliseconds(delayMS))
                 } else {
@@ -1996,12 +1951,6 @@ struct ChatView: View {
                 needsInitialBottomSnap = false
                 shouldFollowStreamingUpdates = true
                 scrollToBottom(with: proxy, animated: false)
-                didSnap = true
-            }
-
-            if revealAfterSnap {
-                needsInitialBottomSnap = false
-                scheduleChatContentReveal(delayMS: didSnap ? 50 : 0)
             }
         }
     }
@@ -2027,7 +1976,7 @@ struct ChatView: View {
                 try? await Task.sleep(for: .milliseconds(delayMS))
             }
             guard !Task.isCancelled, canPerformScheduledChatScroll else { return }
-            guard hasLoadedInitialWindow, shouldLiveTailStreamingUpdates else { return }
+            guard shouldLiveTailStreamingUpdates else { return }
 
             taskStore.lastStreamingAutoScrollAt = Date()
             scrollToBottom(with: proxy, animated: false)
@@ -2040,6 +1989,7 @@ struct ChatView: View {
 
     private func scrollToBottom(with proxy: ScrollViewProxy, animated: Bool) {
         guard canPerformScheduledChatScroll else { return }
+        hasUserInterruptedStreamingFollow = false
         shouldFollowStreamingUpdates = true
         performChatScroll(animated: animated) {
             proxy.scrollTo(ChatScrollTarget.bottomAnchor, anchor: .bottom)
@@ -2072,11 +2022,10 @@ struct ChatView: View {
     }
 
     private var bottomOverscrollRefreshGesture: some Gesture {
-        DragGesture(minimumDistance: 8, coordinateSpace: .local)
+        DragGesture(minimumDistance: 1, coordinateSpace: .local)
             .onChanged { value in
-                if value.translation.height > 4 {
-                    shouldFollowStreamingUpdates = false
-                }
+                isUserDraggingChatScroll = true
+                interruptStreamingFollowForUserScroll()
 
                 if !bottomPullIsTracking {
                     bottomPullIsTracking = true
@@ -2097,6 +2046,12 @@ struct ChatView: View {
                 }
             }
             .onEnded { _ in
+                isUserDraggingChatScroll = false
+                if isScrollGeometryAtBottom {
+                    hasUserInterruptedStreamingFollow = false
+                    shouldFollowStreamingUpdates = true
+                }
+
                 let shouldRefresh = bottomPullStartedAtBottom && bottomPullDistance >= bottomRefreshThreshold && !isRefreshingChatData
                 bottomPullIsTracking = false
                 bottomPullStartedAtBottom = false
@@ -2112,6 +2067,14 @@ struct ChatView: View {
                     }
                 }
             }
+    }
+
+    private func interruptStreamingFollowForUserScroll() {
+        guard shouldFollowStreamingUpdates || !hasUserInterruptedStreamingFollow else { return }
+        hasUserInterruptedStreamingFollow = true
+        shouldFollowStreamingUpdates = false
+        taskStore.streamingAutoScrollTask?.cancel()
+        taskStore.streamingAutoScrollTask = nil
     }
 
     @MainActor
@@ -2133,7 +2096,7 @@ struct ChatView: View {
     private var messageBottomPadding: CGFloat { 20 }
 
     private var displayedMessages: ArraySlice<OpenCodeMessageEnvelope> {
-        viewModel.messages.suffix(visibleMessageCount)
+        viewModel.messages[...]
     }
 
     private var displayedMessagesArray: [OpenCodeMessageEnvelope] {
@@ -2214,10 +2177,6 @@ struct ChatView: View {
         }
 
         return "\(value.prefix(160))\u{1f}\(value.suffix(160))".hashValue
-    }
-
-    private var hiddenMessageCount: Int {
-        max(0, viewModel.messages.count - displayedMessages.count)
     }
 
     private var lastDisplayedMessageTextLength: Int {
@@ -2326,7 +2285,7 @@ struct ChatView: View {
             isStreamingMessage: isStreamingMessage(message),
             animatesStreamingText: shouldAnimateStreamingText,
             reserveEntryFromComposer: message.id == preparingOutgoingMessageID,
-            animateEntryFromComposer: message.id == animatingOutgoingMessageID,
+            animateEntryFromComposer: message.id == animatingOutgoingMessageID && !outgoingEntryAnimationStartedMessageIDs.contains(message.id),
             entrySourceFrame: outgoingEntrySourceFrame(for: message)
         )
 
@@ -2343,6 +2302,8 @@ struct ChatView: View {
             Task { await viewModel.forkSelectedSession(from: forkMessage.id) }
         } onInspectDebugMessage: { debugMessage in
             selectedMessageDebugPayload = MessageDebugPayload(message: debugMessage)
+        } onEntryAnimationStarted: { messageID in
+            outgoingEntryAnimationStartedMessageIDs.insert(messageID)
         }
         .equatable()
         .transition(messageRowTransition(for: message))
@@ -2450,88 +2411,6 @@ struct ChatView: View {
         }
     }
 
-    private func updateChatContentVisibility() {
-        if isLoadingSelectedSession {
-            contentRevealTask?.cancel()
-            isChatContentVisible = !shouldAnimateInitialChatReveal
-            chatContentOffsetY = shouldAnimateInitialChatReveal ? 10 : 0
-            scheduleLoadingIndicatorReveal()
-            return
-        }
-
-        if viewModel.messages.isEmpty {
-            contentRevealTask?.cancel()
-            loadingIndicatorTask?.cancel()
-            shouldShowLoadingIndicator = false
-            isChatContentVisible = true
-            chatContentOffsetY = 0
-            return
-        }
-
-        if isWaitingForInitialChatReveal {
-            loadingIndicatorTask?.cancel()
-            shouldShowLoadingIndicator = false
-            setChatContentHiddenForInitialReveal()
-            return
-        }
-
-        guard hasCompletedInitialHydrationSnap else {
-            loadingIndicatorTask?.cancel()
-            shouldShowLoadingIndicator = false
-            isChatContentVisible = !shouldAnimateInitialChatReveal
-            chatContentOffsetY = shouldAnimateInitialChatReveal ? 10 : 0
-            return
-        }
-
-        guard shouldAnimateInitialChatReveal else {
-            contentRevealTask?.cancel()
-            loadingIndicatorTask?.cancel()
-            shouldShowLoadingIndicator = false
-            isChatContentVisible = true
-            chatContentOffsetY = 0
-            return
-        }
-
-        scheduleChatContentReveal(delayMS: 120)
-    }
-
-    private func setChatContentHiddenForInitialReveal() {
-        var transaction = Transaction()
-        transaction.animation = nil
-        withTransaction(transaction) {
-            isChatContentVisible = false
-            chatContentOffsetY = 10
-        }
-    }
-
-    private func scheduleChatContentReveal(delayMS: Int) {
-        guard !isLoadingSelectedSession else { return }
-        contentRevealTask?.cancel()
-        loadingIndicatorTask?.cancel()
-        shouldShowLoadingIndicator = false
-        contentRevealTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(delayMS))
-            guard !Task.isCancelled, !isLoadingSelectedSession else { return }
-            isWaitingForInitialChatReveal = false
-            withAnimation(.easeOut(duration: 0.18)) {
-                isChatContentVisible = true
-                chatContentOffsetY = 0
-            }
-        }
-    }
-
-    private func scheduleLoadingIndicatorReveal() {
-        loadingIndicatorTask?.cancel()
-        shouldShowLoadingIndicator = false
-        loadingIndicatorTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(3))
-            guard !Task.isCancelled, isLoadingSelectedSession, !isChatContentVisible else { return }
-            withAnimation(.easeOut(duration: 0.15)) {
-                shouldShowLoadingIndicator = true
-            }
-        }
-    }
-
     private func startOutgoingBubbleAnimationAndSend() {
         persistComposerDraftNow()
         let draftText = composerDraftStore.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2562,19 +2441,16 @@ struct ChatView: View {
 
         OpenCodeHaptics.impact(.strong)
         viewModel.markChatBreadcrumb("send tapped", sessionID: sessionID)
-        shouldSnapOnNextMessage = true
+        shouldSnapOnNextMessage = false
         shouldFollowStreamingUpdates = true
 
-        let shouldAnimateBubble = !draftText.isEmpty && !hasAttachments
         let messageID = OpenCodeIdentifier.message()
         let partID = OpenCodeIdentifier.part()
-        preparingOutgoingMessageID = shouldAnimateBubble ? messageID : nil
-        outgoingEntrySourceFrame = shouldAnimateBubble ? composerInputFrame : nil
 
         let pendingSend = PendingOutgoingSend(
             text: draftText,
             attachments: draftAttachments,
-            shouldAnimateBubble: shouldAnimateBubble,
+            shouldAnimateBubble: false,
             messageID: messageID,
             partID: partID
         )
@@ -2584,31 +2460,9 @@ struct ChatView: View {
         withAnimation(sendChoreographyAnimation) {
             _ = viewModel.insertOptimisticUserMessage(draftText, attachments: draftAttachments, in: liveSession, messageID: messageID, partID: partID, animated: false)
         }
-        scheduleThinkingRowReveal(delayMS: shouldAnimateBubble ? 260 : 180)
+        scheduleThinkingRowReveal(delayMS: 180)
         clearComposerDraft()
         viewModel.clearDraftAttachments()
-
-        if shouldAnimateBubble {
-            scheduleOutgoingEntryAnimation(messageID: messageID)
-
-            pendingOutgoingSendTask = Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(260))
-                guard !Task.isCancelled, viewModel.activeChatSessionID == sessionID else { return }
-
-                pendingOutgoingSend = nil
-                await viewModel.sendMessage(
-                    pendingSend.text,
-                    attachments: pendingSend.attachments,
-                    in: liveSession,
-                    userVisible: true,
-                    messageID: pendingSend.messageID,
-                    partID: pendingSend.partID,
-                    appendOptimisticMessage: false,
-                    meterPrompt: false
-                )
-            }
-            return
-        }
 
         pendingOutgoingSendTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(120))
@@ -2644,6 +2498,7 @@ struct ChatView: View {
                 preparingOutgoingMessageID = nil
             }
             outgoingEntrySourceFrame = nil
+            outgoingEntryAnimationStartedMessageIDs.remove(messageID)
         }
     }
 
@@ -2675,6 +2530,9 @@ struct ChatView: View {
                 preparingOutgoingMessageID = nil
                 animatingOutgoingMessageID = nil
                 outgoingEntrySourceFrame = nil
+                if let messageID = pendingSend.messageID {
+                    outgoingEntryAnimationStartedMessageIDs.remove(messageID)
+                }
             }
             restoreComposerDraft(pendingSend.text)
             viewModel.addDraftAttachments(pendingSend.attachments)
@@ -2683,13 +2541,6 @@ struct ChatView: View {
 
         Task { await viewModel.stopCurrentSession() }
     }
-
-#if canImport(UIKit)
-    private func keyboardWillShow(from notification: Notification) -> Bool {
-        guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return false }
-        return frame.minY < UIScreen.main.bounds.height
-    }
-#endif
 
     private var shouldShowThinking: Bool {
         if pendingOutgoingSend != nil {
