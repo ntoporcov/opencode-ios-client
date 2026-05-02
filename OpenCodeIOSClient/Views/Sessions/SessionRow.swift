@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct SessionRow: View, Equatable {
-    enum Style {
+    enum Style: Equatable {
         case regular
         case compact
     }
