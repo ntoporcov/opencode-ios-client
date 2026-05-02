@@ -51,6 +51,16 @@ Authentication uses the OpenCode server's HTTP Basic Auth credentials, backed by
 
 This is an active native client for OpenCode, not an official OpenCode project. The app is intentionally aligned with upstream OpenCode client architecture where possible, especially around shared event streaming, typed events, bootstrap, reducer-style state updates, and project -> session -> chat navigation.
 
+## License
+
+This repository is available under the [PolyForm Noncommercial License 1.0.0](LICENSE). You may build, modify, and use OpenClient for personal, educational, research, public-sector, charitable, and other noncommercial purposes.
+
+Commercial use, resale, paid distribution, or other commercialization is not permitted under this license without separate permission from the licensor.
+
+For commercial licensing inquiries, contact the project maintainer through GitHub.
+
+Note: because this license restricts commercial use, it is source-available rather than "open source" under the OSI definition.
+
 ## Requirements
 
 - Xcode 16 or newer recommended.
