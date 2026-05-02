@@ -51,7 +51,13 @@ struct SessionListView: View {
             workspaceSections: workspaceSections,
             errorMessage: viewModel.errorMessage,
             hasProUnlock: viewModel.hasProUnlock,
-            currentProjectActions: viewModel.currentProjectActions
+            currentProjectActions: viewModel.currentProjectActions.map { action in
+                ProjectActionSnapshot(
+                    action: action,
+                    command: viewModel.actionCommand(for: action),
+                    phase: viewModel.actionRunPhase(for: action)
+                )
+            }
         )
     }
 
@@ -209,6 +215,11 @@ private struct SessionListContent: View {
         .scrollContentBackground(.hidden)
         .background(OpenCodePlatformColor.groupedBackground)
         .opencodeInteractiveKeyboardDismiss()
+        .transaction { transaction in
+            if snapshot.hasBusySession {
+                transaction.animation = nil
+            }
+        }
         .alert("Rename Session", isPresented: renameAlertBinding) {
             TextField("Title", text: $renameTitle)
             Button("Cancel", role: .cancel) {
@@ -403,7 +414,7 @@ private struct SessionListContent: View {
 
 private struct ProjectActionStrip: View {
     let viewModel: AppViewModel
-    let actions: [OpenCodeAction]
+    let actions: [ProjectActionSnapshot]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -417,13 +428,13 @@ private struct ProjectActionStrip: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 10) {
-                    ForEach(actions) { action in
+                    ForEach(actions) { item in
                         ProjectActionChip(
-                            action: action,
-                            command: viewModel.actionCommand(for: action),
-                            phase: viewModel.actionRunPhase(for: action)
+                            action: item.action,
+                            command: item.command,
+                            phase: item.phase
                         ) {
-                            Task { await viewModel.runAction(action) }
+                            Task { await viewModel.runAction(item.action) }
                         }
                     }
                 }
@@ -432,6 +443,14 @@ private struct ProjectActionStrip: View {
             .scrollClipDisabled()
         }
     }
+}
+
+private struct ProjectActionSnapshot: Identifiable, Equatable {
+    let action: OpenCodeAction
+    let command: OpenCodeCommand?
+    let phase: OpenCodeActionRunPhase?
+
+    var id: UUID { action.id }
 }
 
 private struct ProjectActionChip: View {
@@ -608,7 +627,13 @@ private struct SessionListDisplaySnapshot: Equatable {
     let workspaceSections: [WorkspaceSessionDisplaySection]
     let errorMessage: String?
     let hasProUnlock: Bool
-    let currentProjectActions: [OpenCodeAction]
+    let currentProjectActions: [ProjectActionSnapshot]
+
+    var hasBusySession: Bool {
+        pinnedRows.contains(where: \.isBusy)
+            || unpinnedRows.contains(where: \.isBusy)
+            || workspaceSections.contains { $0.rows.contains(where: \.isBusy) }
+    }
 
     var workspaceTaskID: String {
         showsWorkspaces ? workspaceSections.map(\.directory).joined(separator: "|") : "off"
