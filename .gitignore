@@ -26,5 +26,8 @@ fastlane/report.xml
 tmp/
 .opencode/.env*
 
+# App Review credentials (managed locally, not in repo)
+fastlane/metadata/review_information/
+
 # Local web dependencies
 ExcalidrawWeb/node_modules/

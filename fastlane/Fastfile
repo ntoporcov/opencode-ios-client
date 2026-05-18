@@ -49,7 +49,8 @@ platform :ios do
     temp = File.join(repo_root, "build", "fastlane", "metadata-upload")
     FileUtils.rm_rf(temp)
     FileUtils.mkdir_p(temp)
-    FileUtils.cp_r(Dir.glob(File.join(source, "*")), temp)
+    entries = Dir.glob(File.join(source, "*")).reject { |e| File.basename(e) == "review_information" }
+    FileUtils.cp_r(entries, temp)
     temp
   end
 
