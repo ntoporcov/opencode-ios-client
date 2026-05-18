@@ -1432,6 +1432,7 @@ struct ChatView: View {
     @State private var selectedCompactionSummary: CompactionSummaryPayload?
     @State private var selectedActivityDetail: ActivityDetail?
     @State private var showingTodoInspector = false
+    @State private var showingContextMetrics = false
     @State private var visibleMessageCount = 50
     @State private var questionAnswers: [String: Set<String>] = [:]
     @State private var questionCustomAnswers: [String: String] = [:]
@@ -1519,6 +1520,13 @@ struct ChatView: View {
 
     private var isComposerBusy: Bool {
         isSessionBusy || pendingOutgoingSend != nil
+    }
+
+    private var contextMetrics: OpenCodeSessionContextMetrics {
+        OpenCodeSessionContextMetricsBuilder.metrics(
+            messages: chatStore.messages,
+            providers: modelConfigurationStore.availableProviders
+        )
     }
 
     private var shouldAnimateStreamingText: Bool {
@@ -1767,7 +1775,7 @@ struct ChatView: View {
         .overlay(alignment: .bottom) {
             composerOverlay
         }
-        .navigationTitle(chatHeaderSnapshot.navigationTitle)
+        .navigationTitle("")
         .opencodeInlineNavigationTitle()
         .onAppear {
             viewModel.activeChatSessionID = sessionID
@@ -1824,6 +1832,12 @@ struct ChatView: View {
             NavigationStack {
                 TodoInspectorView(viewModel: viewModel)
             }
+        }
+        .sheet(isPresented: $showingContextMetrics) {
+            NavigationStack {
+                SessionContextMetricsSheet(session: liveSession, metrics: contextMetrics)
+            }
+            .presentationDetents([.medium, .large])
         }
         .sheet(item: $selectedAttachmentPreview) { attachment in
             NavigationStack {
@@ -3066,19 +3080,11 @@ struct ChatView: View {
                         }
                     }
                 }
-                ToolbarItem(placement: .principal) {
-                    VStack(spacing: 1) {
-                        Text(headerSnapshot.parentTitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Text(headerSnapshot.childTitle)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                    }
-                    .frame(maxWidth: 220)
-                }
+            }
+
+            ToolbarItem(placement: .principal) {
+                ChatNavigationTitle(snapshot: headerSnapshot)
+                    .frame(maxWidth: 300, alignment: .leading)
             }
 
             if !isFunAndGamesSession(liveSession.id) {
@@ -3092,6 +3098,13 @@ struct ChatView: View {
                 ToolbarSpacer(.flexible, placement: .topBarTrailing)
             }
             #endif
+
+            ToolbarItem(placement: .opencodeTrailing) {
+                SessionContextUsageToolbarButton(metrics: contextMetrics) {
+                    showingContextMetrics = true
+                }
+                .opencodeToolbarGlassID("context-usage-toolbar", in: toolbarGlassNamespace)
+            }
 
             ToolbarItem(placement: .opencodeTrailing) {
                 ModelToolbarMenu(viewModel: viewModel, session: liveSession, glassNamespace: toolbarGlassNamespace)
@@ -3118,6 +3131,282 @@ struct ChatView: View {
             }.joined(separator: " ")
             return "\(role):\n\(partSummary)"
         }.joined(separator: "\n\n")
+    }
+}
+
+private struct ChatNavigationTitle: View {
+    let snapshot: AppViewModel.ChatSessionHeaderSnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: snapshot.isChildSession ? 1 : 0) {
+            if snapshot.isChildSession {
+                Text(snapshot.parentTitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Text(snapshot.navigationTitle)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(snapshot.navigationTitle)
+    }
+}
+
+private struct SessionContextUsageToolbarButton: View {
+    let metrics: OpenCodeSessionContextMetrics
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            ContextUsageRing(progress: progress, tint: .primary, lineWidth: 3.25)
+                .frame(width: 19, height: 19)
+                .padding(.vertical, 5)
+                .padding(.horizontal, 3)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("View context usage")
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var progress: Double {
+        guard let usage = metrics.context?.usage else { return 0 }
+        return min(1, max(0, Double(usage) / 100))
+    }
+
+    private var accessibilityValue: String {
+        guard let context = metrics.context else { return "No token usage yet" }
+        if let usage = context.usage {
+            return "\(usage)% used, \(context.total) tokens"
+        }
+        return "\(context.total) tokens"
+    }
+}
+
+private struct ContextUsageRing: View {
+    let progress: Double
+    let tint: Color
+    let lineWidth: CGFloat
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(Color.secondary.opacity(0.2), lineWidth: lineWidth)
+            Circle()
+                .trim(from: 0, to: progress)
+                .stroke(tint, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+    }
+}
+
+private struct SessionContextMetricsSheet: View {
+    let session: OpenCodeSession
+    let metrics: OpenCodeSessionContextMetrics
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        Form {
+            Section {
+                summaryHeader
+            }
+
+            Section("Context") {
+                if let context = metrics.context {
+                    LabeledContent("Provider", value: context.providerLabel)
+                    LabeledContent("Model", value: context.modelLabel)
+                    LabeledContent("Context Limit", value: number(context.limit))
+                    LabeledContent("Total Tokens", value: number(context.total))
+                    LabeledContent("Usage", value: percent(context.usage))
+                    LabeledContent("Input Tokens", value: number(context.input))
+                    LabeledContent("Output Tokens", value: number(context.output))
+                    LabeledContent("Reasoning Tokens", value: number(context.reasoning))
+                    LabeledContent("Cache Tokens", value: "\(number(context.cacheRead)) / \(number(context.cacheWrite))")
+                    LabeledContent("Last Activity", value: time(context.messageCreatedAt))
+                } else {
+                    Text("Context usage appears after the model returns token metrics for this chat.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Session") {
+                LabeledContent("Session", value: session.title?.nilIfEmpty ?? session.id)
+                LabeledContent("Messages", value: number(metrics.messageCount))
+                LabeledContent("User Messages", value: number(metrics.userMessageCount))
+                LabeledContent("Assistant Messages", value: number(metrics.assistantMessageCount))
+                LabeledContent("Total Cost", value: currency(metrics.totalCost))
+            }
+
+            if !metrics.breakdown.isEmpty {
+                Section("Estimated Input Breakdown") {
+                    ContextBreakdownBar(segments: metrics.breakdown)
+                        .frame(height: 10)
+                        .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+
+                    ForEach(metrics.breakdown) { segment in
+                        LabeledContent {
+                            Text("\(segment.percent.formatted(.number.precision(.fractionLength(0 ... 1))))%")
+                                .foregroundStyle(.secondary)
+                        } label: {
+                            HStack(spacing: 8) {
+                                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                    .fill(breakdownColor(for: segment.kind))
+                                    .frame(width: 10, height: 10)
+                                Text(breakdownLabel(for: segment.kind))
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let systemPrompt = metrics.systemPrompt {
+                Section("System Prompt") {
+                    Text(systemPrompt)
+                        .font(.footnote)
+                        .textSelection(.enabled)
+                }
+            }
+        }
+        .navigationTitle("Context")
+        .opencodeInlineNavigationTitle()
+        .toolbar {
+            ToolbarItem(placement: .opencodeTrailing) {
+                Button("Done") {
+                    dismiss()
+                }
+            }
+        }
+    }
+
+    private var summaryHeader: some View {
+        HStack(spacing: 16) {
+            ContextUsageRing(progress: progress, tint: usageTint, lineWidth: 6)
+                .frame(width: 58, height: 58)
+
+            VStack(alignment: .leading, spacing: 4) {
+                if let context = metrics.context {
+                    Text(percent(context.usage))
+                        .font(.title2.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text("\(number(context.total)) tokens used")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Text(currency(metrics.totalCost))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("No token usage yet")
+                        .font(.headline)
+                    Text(currency(metrics.totalCost))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var progress: Double {
+        guard let usage = metrics.context?.usage else { return 0 }
+        return min(1, max(0, Double(usage) / 100))
+    }
+
+    private var usageTint: Color {
+        guard let usage = metrics.context?.usage else { return .secondary }
+        if usage >= 90 { return .red }
+        if usage >= 70 { return .orange }
+        return .blue
+    }
+
+    private func number(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        return value.formatted(.number)
+    }
+
+    private func percent(_ value: Int?) -> String {
+        guard let value else { return "—" }
+        return "\(value.formatted(.number))%"
+    }
+
+    private func currency(_ value: Double) -> String {
+        let fractionDigits = value > 0 && value < 0.01 ? 4 : 2
+        return "$" + String(format: "%.*f", fractionDigits, value)
+    }
+
+    private func time(_ value: Double?) -> String {
+        guard let value else { return "—" }
+        let seconds = value > 100_000_000_000 ? value / 1000 : value
+        return Date(timeIntervalSince1970: seconds).formatted(date: .abbreviated, time: .shortened)
+    }
+
+    private func breakdownLabel(for kind: OpenCodeSessionContextBreakdownSegment.Kind) -> String {
+        switch kind {
+        case .system:
+            return "System"
+        case .user:
+            return "User"
+        case .assistant:
+            return "Assistant"
+        case .tool:
+            return "Tool Calls"
+        case .other:
+            return "Other"
+        }
+    }
+
+    private func breakdownColor(for kind: OpenCodeSessionContextBreakdownSegment.Kind) -> Color {
+        switch kind {
+        case .system:
+            return .cyan
+        case .user:
+            return .green
+        case .assistant:
+            return .indigo
+        case .tool:
+            return .orange
+        case .other:
+            return .secondary
+        }
+    }
+}
+
+private struct ContextBreakdownBar: View {
+    let segments: [OpenCodeSessionContextBreakdownSegment]
+
+    var body: some View {
+        GeometryReader { proxy in
+            HStack(spacing: 0) {
+                ForEach(segments) { segment in
+                    Rectangle()
+                        .fill(color(for: segment.kind))
+                        .frame(width: proxy.size.width * CGFloat(max(0, segment.percent) / 100))
+                }
+            }
+        }
+        .background(Color.secondary.opacity(0.16), in: Capsule())
+        .clipShape(Capsule())
+    }
+
+    private func color(for kind: OpenCodeSessionContextBreakdownSegment.Kind) -> Color {
+        switch kind {
+        case .system:
+            return .cyan
+        case .user:
+            return .green
+        case .assistant:
+            return .indigo
+        case .tool:
+            return .orange
+        case .other:
+            return .secondary
+        }
     }
 }
 

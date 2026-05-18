@@ -379,6 +379,9 @@ struct OpenCodeMessage: Codable, Hashable, Sendable {
     let providerID: String?
     let modelID: String?
     let error: OpenCodeSessionErrorPayload?
+    let cost: Double?
+    let tokens: OpenCodeMessageTokens?
+    let system: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -394,6 +397,9 @@ struct OpenCodeMessage: Codable, Hashable, Sendable {
         case providerID
         case modelID
         case error
+        case cost
+        case tokens
+        case system
     }
 
     init(
@@ -409,7 +415,10 @@ struct OpenCodeMessage: Codable, Hashable, Sendable {
         finish: String? = nil,
         providerID: String? = nil,
         modelID: String? = nil,
-        error: OpenCodeSessionErrorPayload? = nil
+        error: OpenCodeSessionErrorPayload? = nil,
+        cost: Double? = nil,
+        tokens: OpenCodeMessageTokens? = nil,
+        system: String? = nil
     ) {
         self.id = id
         self.role = role
@@ -424,6 +433,9 @@ struct OpenCodeMessage: Codable, Hashable, Sendable {
         self.providerID = providerID
         self.modelID = modelID
         self.error = error
+        self.cost = cost
+        self.tokens = tokens
+        self.system = system
     }
 
     var isCompactionSummary: Bool {
@@ -445,6 +457,9 @@ struct OpenCodeMessage: Codable, Hashable, Sendable {
         providerID = try container.decodeIfPresent(String.self, forKey: .providerID)
         modelID = try container.decodeIfPresent(String.self, forKey: .modelID)
         error = try container.decodeIfPresent(OpenCodeSessionErrorPayload.self, forKey: .error)
+        cost = try container.decodeIfPresent(Double.self, forKey: .cost)
+        tokens = try container.decodeIfPresent(OpenCodeMessageTokens.self, forKey: .tokens)
+        system = try container.decodeIfPresent(String.self, forKey: .system)
     }
 }
 
@@ -457,6 +472,80 @@ struct OpenCodeMessageModelReference: Codable, Hashable, Sendable {
 struct OpenCodeMessageTime: Codable, Hashable, Sendable {
     let created: Double?
     let completed: Double?
+}
+
+struct OpenCodeMessageTokenCache: Codable, Hashable, Sendable {
+    let read: Int
+    let write: Int
+
+    enum CodingKeys: String, CodingKey {
+        case read
+        case write
+    }
+
+    init(read: Int = 0, write: Int = 0) {
+        self.read = read
+        self.write = write
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        read = Self.decodeInt(container, forKey: .read)
+        write = Self.decodeInt(container, forKey: .write)
+    }
+
+    private static func decodeInt(_ container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Int {
+        if let value = try? container.decode(Int.self, forKey: key) { return value }
+        if let value = try? container.decode(Double.self, forKey: key) { return Int(value) }
+        return 0
+    }
+}
+
+struct OpenCodeMessageTokens: Codable, Hashable, Sendable {
+    let total: Int?
+    let input: Int
+    let output: Int
+    let reasoning: Int
+    let cache: OpenCodeMessageTokenCache
+
+    enum CodingKeys: String, CodingKey {
+        case total
+        case input
+        case output
+        case reasoning
+        case cache
+    }
+
+    init(total: Int? = nil, input: Int = 0, output: Int = 0, reasoning: Int = 0, cache: OpenCodeMessageTokenCache = OpenCodeMessageTokenCache()) {
+        self.total = total
+        self.input = input
+        self.output = output
+        self.reasoning = reasoning
+        self.cache = cache
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        total = Self.decodeOptionalInt(container, forKey: .total)
+        input = Self.decodeInt(container, forKey: .input)
+        output = Self.decodeInt(container, forKey: .output)
+        reasoning = Self.decodeInt(container, forKey: .reasoning)
+        cache = (try? container.decode(OpenCodeMessageTokenCache.self, forKey: .cache)) ?? OpenCodeMessageTokenCache()
+    }
+
+    var computedTotal: Int {
+        input + output + reasoning + cache.read + cache.write
+    }
+
+    private static func decodeInt(_ container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Int {
+        decodeOptionalInt(container, forKey: key) ?? 0
+    }
+
+    private static func decodeOptionalInt(_ container: KeyedDecodingContainer<CodingKeys>, forKey key: CodingKeys) -> Int? {
+        if let value = try? container.decode(Int.self, forKey: key) { return value }
+        if let value = try? container.decode(Double.self, forKey: key) { return Int(value) }
+        return nil
+    }
 }
 
 struct OpenCodeEventInfo: Codable, Hashable, Sendable {
@@ -476,6 +565,9 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
     let providerID: String?
     let modelID: String?
     let error: OpenCodeSessionErrorPayload?
+    let cost: Double?
+    let tokens: OpenCodeMessageTokens?
+    let system: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -494,6 +586,9 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
         case providerID
         case modelID
         case error
+        case cost
+        case tokens
+        case system
     }
 
     init(message: OpenCodeMessage) {
@@ -513,6 +608,9 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
         providerID = message.providerID
         modelID = message.modelID
         error = message.error
+        cost = message.cost
+        tokens = message.tokens
+        system = message.system
     }
 
     func asMessage() -> OpenCodeMessage {
@@ -532,7 +630,10 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
             finish: finish,
             providerID: providerID,
             modelID: modelID,
-            error: error
+            error: error,
+            cost: cost,
+            tokens: tokens,
+            system: system
         )
     }
 
@@ -558,6 +659,9 @@ struct OpenCodeEventInfo: Codable, Hashable, Sendable {
         providerID = try container.decodeIfPresent(String.self, forKey: .providerID)
         modelID = try container.decodeIfPresent(String.self, forKey: .modelID)
         error = try container.decodeIfPresent(OpenCodeSessionErrorPayload.self, forKey: .error)
+        cost = try container.decodeIfPresent(Double.self, forKey: .cost)
+        tokens = try container.decodeIfPresent(OpenCodeMessageTokens.self, forKey: .tokens)
+        system = try container.decodeIfPresent(String.self, forKey: .system)
     }
 }
 
@@ -586,18 +690,265 @@ struct OpenCodeModelCapabilities: Codable, Hashable, Sendable {
     let reasoning: Bool
 }
 
+struct OpenCodeModelLimit: Codable, Hashable, Sendable {
+    let context: Int?
+}
+
 struct OpenCodeModel: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let providerID: String
     let name: String
     let capabilities: OpenCodeModelCapabilities
     let variants: [String: OpenCodeJSONValue]?
+    let limit: OpenCodeModelLimit?
+
+    init(
+        id: String,
+        providerID: String,
+        name: String,
+        capabilities: OpenCodeModelCapabilities,
+        variants: [String: OpenCodeJSONValue]? = nil,
+        limit: OpenCodeModelLimit? = nil
+    ) {
+        self.id = id
+        self.providerID = providerID
+        self.name = name
+        self.capabilities = capabilities
+        self.variants = variants
+        self.limit = limit
+    }
 }
 
 struct OpenCodeProvider: Codable, Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     let models: [String: OpenCodeModel]
+}
+
+struct OpenCodeSessionContextMetrics: Hashable, Sendable {
+    let totalCost: Double
+    let messageCount: Int
+    let userMessageCount: Int
+    let assistantMessageCount: Int
+    let context: OpenCodeSessionContextSnapshot?
+    let breakdown: [OpenCodeSessionContextBreakdownSegment]
+    let systemPrompt: String?
+}
+
+struct OpenCodeSessionContextSnapshot: Hashable, Sendable {
+    let messageID: String
+    let messageCreatedAt: Double?
+    let providerLabel: String
+    let modelLabel: String
+    let limit: Int?
+    let input: Int
+    let output: Int
+    let reasoning: Int
+    let cacheRead: Int
+    let cacheWrite: Int
+    let total: Int
+    let usage: Int?
+}
+
+struct OpenCodeSessionContextBreakdownSegment: Identifiable, Hashable, Sendable {
+    enum Kind: String, Hashable, Sendable {
+        case system
+        case user
+        case assistant
+        case tool
+        case other
+    }
+
+    let kind: Kind
+    let tokens: Int
+    let percent: Double
+
+    var id: String { kind.rawValue }
+}
+
+enum OpenCodeSessionContextMetricsBuilder {
+    static func metrics(messages: [OpenCodeMessageEnvelope], providers: [OpenCodeProvider]) -> OpenCodeSessionContextMetrics {
+        let totalCost = messages.reduce(0) { sum, message in
+            guard message.info.role?.lowercased() == "assistant" else { return sum }
+            return sum + (message.info.cost ?? 0)
+        }
+        let messageCount = messages.count
+        let userMessageCount = messages.filter { $0.info.role?.lowercased() == "user" }.count
+        let assistantMessageCount = messages.filter { $0.info.role?.lowercased() == "assistant" }.count
+        let systemPrompt = latestSystemPrompt(in: messages)
+
+        guard let message = latestAssistantMessageWithTokens(in: messages),
+              let tokens = message.info.tokens else {
+            return OpenCodeSessionContextMetrics(
+                totalCost: totalCost,
+                messageCount: messageCount,
+                userMessageCount: userMessageCount,
+                assistantMessageCount: assistantMessageCount,
+                context: nil,
+                breakdown: [],
+                systemPrompt: systemPrompt
+            )
+        }
+
+        let modelReference = effectiveModelReference(for: message.info)
+        let provider = providers.first { $0.id == modelReference.providerID }
+        let model = modelReference.modelID.flatMap { provider?.models[$0] }
+        let limit = model?.limit?.context
+        let total = tokens.computedTotal
+        let usage = limit.flatMap { limit -> Int? in
+            guard limit > 0 else { return nil }
+            return Int((Double(total) / Double(limit) * 100).rounded())
+        }
+        let context = OpenCodeSessionContextSnapshot(
+            messageID: message.id,
+            messageCreatedAt: message.info.time?.created,
+            providerLabel: provider?.name ?? modelReference.providerID ?? "—",
+            modelLabel: model?.name ?? modelReference.modelID ?? "—",
+            limit: limit,
+            input: tokens.input,
+            output: tokens.output,
+            reasoning: tokens.reasoning,
+            cacheRead: tokens.cache.read,
+            cacheWrite: tokens.cache.write,
+            total: total,
+            usage: usage
+        )
+
+        return OpenCodeSessionContextMetrics(
+            totalCost: totalCost,
+            messageCount: messageCount,
+            userMessageCount: userMessageCount,
+            assistantMessageCount: assistantMessageCount,
+            context: context,
+            breakdown: estimateBreakdown(messages: messages, input: tokens.input, systemPrompt: systemPrompt),
+            systemPrompt: systemPrompt
+        )
+    }
+
+    private static func latestAssistantMessageWithTokens(in messages: [OpenCodeMessageEnvelope]) -> OpenCodeMessageEnvelope? {
+        for message in messages.reversed() {
+            guard message.info.role?.lowercased() == "assistant" else { continue }
+            guard let tokens = message.info.tokens, tokens.computedTotal > 0 else { continue }
+            return message
+        }
+        return nil
+    }
+
+    private static func effectiveModelReference(for message: OpenCodeMessage) -> (providerID: String?, modelID: String?) {
+        let providerID = message.model?.providerID ?? message.providerID
+        let modelID = message.model?.modelID ?? message.modelID
+        return (providerID, modelID)
+    }
+
+    private static func latestSystemPrompt(in messages: [OpenCodeMessageEnvelope]) -> String? {
+        for message in messages.reversed() {
+            guard message.info.role?.lowercased() == "user" else { continue }
+            let trimmed = message.info.system?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return nil
+    }
+
+    private static func estimateBreakdown(messages: [OpenCodeMessageEnvelope], input: Int, systemPrompt: String?) -> [OpenCodeSessionContextBreakdownSegment] {
+        guard input > 0 else { return [] }
+
+        var counts = (system: systemPrompt?.count ?? 0, user: 0, assistant: 0, tool: 0)
+        for message in messages {
+            switch message.info.role?.lowercased() {
+            case "user":
+                counts.user += message.parts.reduce(0) { $0 + userCharacterCount(for: $1) }
+            case "assistant":
+                let assistantCounts = message.parts.reduce((assistant: 0, tool: 0)) { partial, part in
+                    let next = assistantCharacterCount(for: part)
+                    return (partial.assistant + next.assistant, partial.tool + next.tool)
+                }
+                counts.assistant += assistantCounts.assistant
+                counts.tool += assistantCounts.tool
+            default:
+                break
+            }
+        }
+
+        var tokens = (
+            system: estimateTokens(forCharacters: counts.system),
+            user: estimateTokens(forCharacters: counts.user),
+            assistant: estimateTokens(forCharacters: counts.assistant),
+            tool: estimateTokens(forCharacters: counts.tool)
+        )
+        let estimated = tokens.system + tokens.user + tokens.assistant + tokens.tool
+        if estimated > input, estimated > 0 {
+            let scale = Double(input) / Double(estimated)
+            tokens = (
+                system: Int(floor(Double(tokens.system) * scale)),
+                user: Int(floor(Double(tokens.user) * scale)),
+                assistant: Int(floor(Double(tokens.assistant) * scale)),
+                tool: Int(floor(Double(tokens.tool) * scale))
+            )
+        }
+
+        let known = tokens.system + tokens.user + tokens.assistant + tokens.tool
+        return buildBreakdownSegments(
+            tokens: [
+                .system: tokens.system,
+                .user: tokens.user,
+                .assistant: tokens.assistant,
+                .tool: tokens.tool,
+                .other: max(0, input - known)
+            ],
+            input: input
+        )
+    }
+
+    private static func buildBreakdownSegments(tokens: [OpenCodeSessionContextBreakdownSegment.Kind: Int], input: Int) -> [OpenCodeSessionContextBreakdownSegment] {
+        let kinds: [OpenCodeSessionContextBreakdownSegment.Kind] = [.system, .user, .assistant, .tool, .other]
+        return kinds
+            .compactMap { kind in
+                let count = tokens[kind] ?? 0
+                guard count > 0 else { return nil }
+                let percent = (Double(count) / Double(input) * 1000).rounded() / 10
+                return OpenCodeSessionContextBreakdownSegment(kind: kind, tokens: count, percent: percent)
+            }
+    }
+
+    private static func userCharacterCount(for part: OpenCodePart) -> Int {
+        switch part.type {
+        case "text":
+            return part.text?.count ?? 0
+        case "file":
+            return part.source?.text?.value.count ?? part.source?.value?.count ?? 0
+        case "agent":
+            return part.source?.value?.count ?? 0
+        default:
+            return 0
+        }
+    }
+
+    private static func assistantCharacterCount(for part: OpenCodePart) -> (assistant: Int, tool: Int) {
+        switch part.type {
+        case "text", "reasoning":
+            return (part.text?.count ?? 0, 0)
+        case "tool":
+            let input = (part.state?.input?.estimatedKeyCount ?? 0) * 16
+            let status = part.state?.status?.lowercased()
+            if status == "pending" {
+                return (0, input + (part.state?.raw?.count ?? 0))
+            }
+            if status == "completed" {
+                return (0, input + (part.state?.output?.count ?? 0))
+            }
+            if status == "error" {
+                return (0, input + (part.state?.error?.count ?? 0))
+            }
+            return (0, input)
+        default:
+            return (0, 0)
+        }
+    }
+
+    private static func estimateTokens(forCharacters count: Int) -> Int {
+        guard count > 0 else { return 0 }
+        return Int(ceil(Double(count) / 4))
+    }
 }
 
 struct OpenCodeCommand: Codable, Identifiable, Hashable, Sendable {
@@ -1275,6 +1626,25 @@ struct OpenCodeToolState: Codable, Hashable, Sendable {
     let input: OpenCodeToolInput?
     let output: String?
     let metadata: OpenCodeToolMetadata?
+    let raw: String?
+
+    init(
+        status: String?,
+        title: String?,
+        error: String?,
+        input: OpenCodeToolInput?,
+        output: String?,
+        metadata: OpenCodeToolMetadata?,
+        raw: String? = nil
+    ) {
+        self.status = status
+        self.title = title
+        self.error = error
+        self.input = input
+        self.output = output
+        self.metadata = metadata
+        self.raw = raw
+    }
 }
 
 struct OpenCodeToolInput: Codable, Hashable, Sendable {
@@ -1298,6 +1668,12 @@ struct OpenCodeToolInput: Codable, Hashable, Sendable {
         case pattern
         case subagentType = "subagent_type"
         case url
+    }
+
+    var estimatedKeyCount: Int {
+        [command, description, filePath, name, path, query, pattern, subagentType, url]
+            .compactMap { $0?.isEmpty == false ? $0 : nil }
+            .count
     }
 }
 

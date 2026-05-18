@@ -263,6 +263,89 @@ final class OpenCodeStreamingTests: XCTestCase {
         XCTAssertEqual(questions.map(\.id), ["q_1"])
     }
 
+    func testMessageUpdatedDecodesTokenCostAndSystemFields() throws {
+        let payload = try decodeEvent(
+            #"{"type":"message.updated","properties":{"sessionID":"ses_test","info":{"id":"msg_assistant","role":"assistant","sessionID":"ses_test","providerID":"openai","modelID":"gpt-4.1","cost":1.25,"tokens":{"input":300,"output":100,"reasoning":50,"cache":{"read":25,"write":25}},"system":"system prompt"}}}"#
+        )
+
+        guard case let .messageUpdated(message) = try XCTUnwrap(OpenCodeTypedEvent(envelope: payload)) else {
+            return XCTFail("Expected messageUpdated typed event")
+        }
+
+        XCTAssertEqual(message.cost, 1.25)
+        XCTAssertEqual(message.tokens?.input, 300)
+        XCTAssertEqual(message.tokens?.output, 100)
+        XCTAssertEqual(message.tokens?.reasoning, 50)
+        XCTAssertEqual(message.tokens?.cache.read, 25)
+        XCTAssertEqual(message.tokens?.cache.write, 25)
+        XCTAssertEqual(message.tokens?.computedTotal, 500)
+        XCTAssertEqual(message.providerID, "openai")
+        XCTAssertEqual(message.modelID, "gpt-4.1")
+        XCTAssertEqual(message.system, "system prompt")
+    }
+
+    func testModelDecodesContextLimit() throws {
+        let model = try JSONDecoder().decode(
+            OpenCodeModel.self,
+            from: Data(#"{"id":"gpt-4.1","providerID":"openai","name":"GPT-4.1","capabilities":{"reasoning":true},"limit":{"context":200000,"output":8192}}"#.utf8)
+        )
+
+        XCTAssertEqual(model.limit?.context, 200_000)
+    }
+
+    func testSessionContextMetricsUseLatestAssistantWithTokens() {
+        let messages = [
+            contextMessage(id: "msg_user", role: "user", text: "hello", system: "system prompt"),
+            contextMessage(
+                id: "msg_a1",
+                role: "assistant",
+                text: "first",
+                cost: 0.5,
+                tokens: OpenCodeMessageTokens(input: 0, output: 0, reasoning: 0, cache: OpenCodeMessageTokenCache(read: 0, write: 0)),
+                providerID: "openai",
+                modelID: "gpt-4.1"
+            ),
+            contextMessage(
+                id: "msg_a2",
+                role: "assistant",
+                text: "second",
+                cost: 1.25,
+                tokens: OpenCodeMessageTokens(input: 300, output: 100, reasoning: 50, cache: OpenCodeMessageTokenCache(read: 25, write: 25)),
+                providerID: "openai",
+                modelID: "gpt-4.1"
+            )
+        ]
+        let providers = [
+            OpenCodeProvider(
+                id: "openai",
+                name: "OpenAI",
+                models: [
+                    "gpt-4.1": OpenCodeModel(
+                        id: "gpt-4.1",
+                        providerID: "openai",
+                        name: "GPT-4.1",
+                        capabilities: OpenCodeModelCapabilities(reasoning: true),
+                        limit: OpenCodeModelLimit(context: 1_000)
+                    )
+                ]
+            )
+        ]
+
+        let metrics = OpenCodeSessionContextMetricsBuilder.metrics(messages: messages, providers: providers)
+
+        XCTAssertEqual(metrics.totalCost, 1.75)
+        XCTAssertEqual(metrics.messageCount, 3)
+        XCTAssertEqual(metrics.userMessageCount, 1)
+        XCTAssertEqual(metrics.assistantMessageCount, 2)
+        XCTAssertEqual(metrics.systemPrompt, "system prompt")
+        XCTAssertEqual(metrics.context?.messageID, "msg_a2")
+        XCTAssertEqual(metrics.context?.total, 500)
+        XCTAssertEqual(metrics.context?.usage, 50)
+        XCTAssertEqual(metrics.context?.providerLabel, "OpenAI")
+        XCTAssertEqual(metrics.context?.modelLabel, "GPT-4.1")
+        XCTAssertFalse(metrics.breakdown.isEmpty)
+    }
+
     func testManagedEventDecodeReportsDroppedQuestionPayloads() {
         let result = OpenCodeEventManager.decodeManagedEvent(
             from: #"{"directory":"/tmp/project","type":"question.asked","properties":{"id":"q_1","sessionID":"ses_test"}}"#
@@ -893,6 +976,37 @@ This appended section simulates more streamed text arriving after some chunks ha
     private func deltaText(_ event: OpenCodePendingTranscriptEvent) -> String? {
         guard case let .messagePartDelta(_, _, _, _, delta) = event.typedEvent else { return nil }
         return delta
+    }
+
+    private func contextMessage(
+        id: String,
+        role: String,
+        text: String,
+        cost: Double? = nil,
+        tokens: OpenCodeMessageTokens? = nil,
+        providerID: String? = nil,
+        modelID: String? = nil,
+        system: String? = nil,
+        sessionID: String = "ses_test"
+    ) -> OpenCodeMessageEnvelope {
+        OpenCodeMessageEnvelope(
+            info: OpenCodeMessage(
+                id: id,
+                role: role,
+                sessionID: sessionID,
+                time: OpenCodeMessageTime(created: 1_711_236_000, completed: nil),
+                agent: nil,
+                model: nil,
+                providerID: providerID,
+                modelID: modelID,
+                cost: cost,
+                tokens: tokens,
+                system: system
+            ),
+            parts: [
+                OpenCodePart(id: "part_\(id)", messageID: id, sessionID: sessionID, type: "text", mime: nil, filename: nil, url: nil, reason: nil, tool: nil, callID: nil, state: nil, text: text),
+            ]
+        )
     }
 
     private func message(id: String, role: String, text: String, sessionID: String = "ses_test") -> OpenCodeMessageEnvelope {
